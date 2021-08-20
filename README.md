@@ -51,4 +51,14 @@ To do this:
 - open Anaconda prompt (anaconda into windows search bar)
 - navigate to repo directory (Z:\PyCharmProjects\LTXb-py\ for example)
 - `conda activate <interpreter name>`
-- `pip freeze > requirements.txt`
+- `pip list --format=freeze > requirements.txt`
+
+###### Adding packages
+Editing and adding new routines might require adding new python packages to the interpreter. PyCharm is often smart enough to do this from the IDE. If, for example, you try `import numpy as np` and numpy isn't installed, you can click on the red squiggle and PyCharm will give you the option to install.
+Not all packages are available this way, however. Alternate methods mimic the steps above:
+- open Ananconda prompt
+- `conda activate <interpreter name>`
+- try: `pip install <package name>` or `conda install <package name>`
+
+###### MDSplus
+I recall some difficulty installing the MDSplus python package, but don't remember the steps. Again, if anyone has to go through this, updating this README would be helpful.

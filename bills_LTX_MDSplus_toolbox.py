@@ -6,13 +6,8 @@ from math import *
 # from scipy.integrate import cumtrapz
 from scipy.interpolate.interpolate import interp1d
 from pylab import *
-# from scipy import optimize
 import time as timetools
-# from pauls_toolbox import *
-# import pmds as mds
 import MDSplus as mds
-import matplotlib.pyplot as plt
-
 import inspect, os
 
 diagnosticsyes = 0  # general flag for diagnostic reporting
@@ -122,15 +117,15 @@ def get_data(mytree, node, t_start=None, t_end=None, times=None):
 	#		return get_data_fromhome(temp_tree,temp_node,t_start,t_end,times)
 	#	else:
 	#		return get_data_fromlab(temp_tree, temp_node, t_start, t_end, times)
-
+	
 	if runfromhome:
 		rawdata = mytree.get(node).data()
 	else:
 		mydatarec = mytree.getNode(node).record
 		rawdata = mydatarec.data()
-
+	
 	#	print( mytree,max(data),min(data) )
-
+	
 	if type(rawdata) == type(array(list())):
 		if runfromhome:
 			mytimes = mytree.get('dim_of(' + node + ')').data()
@@ -149,7 +144,7 @@ def get_data(mytree, node, t_start=None, t_end=None, times=None):
 		if t_end is not None:
 			stop_idx = abs(mytimes - t_end).argsort()[0]
 		# print('test4')
-
+		
 		if times is None:
 			# print(len(mytimes),len(data),start_idx,stop_idx)
 			# print(len(mytimes[start_idx:stop_idx]),len(data[start_idx:stop_idx]),stop_idx-start_idx)
@@ -229,23 +224,23 @@ def signals_from_shot(tree, nodenames, t_start=None, t_end=None, times=None):
 	This is just a thin wrapper to iterate over `get_data`.
 	----- code by Niko Rath, modified for use with `get_data` by Paul Hughes
 	'''
-
+	
 	if (times is not None and
 			(t_start is not None or t_end is not None)):
 		raise ValueError('t_start/t_end and times parameters are mutually exclusive')
-
+	
 	ret_times = times is None
 	for (i, name) in enumerate(nodenames):
 		if times is None:
 			(times, data) = get_data(tree, name, t_start, t_end)
 		else:
 			data = get_data(tree, name, times=times)
-
+		
 		if i == 0:
 			alldata = np.empty((len(nodenames), len(times)))
-
+		
 		alldata[i] = data
-
+	
 	if ret_times:
 		return (times, alldata)
 	else:
@@ -367,7 +362,7 @@ def GetPlasmaCurrent(mytree, coilcurrents=None, t_start=None, t_end=None):
 	# print('For plasma current: ',shape(coilcurrents[coilstep]))
 	time_IP, data_IP = GetCorrectedSignal(mytree, node_IP, I_coils=coilcurrents, subfactslist=coilpickupfacts,
 	                                      t_start=t_start, t_end=t_end)
-
+	
 	if t_start == None:
 		startindex = 0
 	else:
@@ -391,11 +386,11 @@ def GetTimescales(shot_tree):
 	timescale = get_data(shot_tree, VF_node_loc)[0]
 	last_index = len(timescale) - 10
 	timescale = timescale[:last_index + 1]
-
+	
 	timescale_TF = get_data(shot_tree, TFP_node_loc)[0]
 	last_index_TF = len(timescale_TF) - 10
 	timescale_TF = timescale_TF[:last_index_TF + 1]
-
+	
 	return timescale, timescale_TF
 
 
@@ -418,18 +413,18 @@ def GetPickups(shotnum, fixedparams, mydigitimes, myTFdigitimes):
 	[datalength_TF, deltat_TF, tnaught_TF] = [len(myTFdigitimes), myTFdigitimes[1] - myTFdigitimes[0], myTFdigitimes[0]]
 	[IP_tf_pickup, sin1_tf_pickup, cos1_tf_pickup, t_ohbias_trig, oh_start_trig, sin1_oh_raw, cos1_oh_raw,
 	 OHcurrent_raw, rog_tb, sin1_vf_raw, cos1_vf_raw, VFcurrent_raw] = fixedparams
-
+	
 	# TF pickup
 	# IP_tf_pickup = get_data(IP_raw_loc_old,tf_pickup_shot)[0]
 	# sin1_tf_pickup = get_data(IP_raw_loc_old,tf_pickup_shot)[0]
 	# cos1_tf_pickup = get_data(IP_raw_loc_old,tf_pickup_shot)[0]
 	#	sin1_tf_pickup = sum(sin1_tf/TorMagField)/datalength
 	#	cos1_tf_pickup = sum(cos1_tf/TorMagField)/datalength
-
+	
 	# OH pickup
 	# t_ohbias_trig=get_data('.timing.banks:oh_bias_st',oh_pickup_shot)*u
 	# oh_start_trig=get_data('.timing.banks:oh_st',oh_pickup_shot)*u
-
+	
 	offset_index = TtI(t_ohbias_trig, deltat, tnaught)  # time lt oh_bias_trig)
 	index_0 = TtI(-m, deltat, tnaught)
 	index_1 = TtI(20. * m, deltat, tnaught)
@@ -459,7 +454,7 @@ def GetPickups(shotnum, fixedparams, mydigitimes, myTFdigitimes):
 	cos1_oh_pickup = norm(cos1_oh[:TtI(m, deltat, rog_tb_trim[0])]) / norm(OHcurrent[:TtI(m, deltat, rog_tb_trim[0])])
 	#	sin1_oh_pickup = sum(sin1_oh/OHcurrent)/len(OHcurrent)
 	#	cos1_oh_pickup = sum(cos1_oh/OHcurrent)/len(OHcurrent)
-
+	
 	# VF pickup
 	if (vf_pickup_shot > 70000):
 		sin1_vf = get_data(sin1_loc + ':raw', vf_pickup_shot)[1]
@@ -522,26 +517,26 @@ def GetFixedPickups(verbose=True):
 	if verbose: print(' > > > sin1-TF')
 	cos1_tf_pickup = get_data(tftree, IP_raw_loc_old)[1]
 	if verbose: print(' > > > cos1-TF')
-
+	
 	ohtree = get_tree_conn(oh_pickup_shot)
 	t_ohbias_trig = get_data(ohtree, '.timing.banks:oh_bias_st') * u
 	if verbose: print(' > > > t_OHB')
 	oh_start_trig = get_data(ohtree, '.timing.banks:oh_st') * u
 	if verbose: print(' > > > t_OHS')
-
+	
 	rog_tb = get_data(ohtree, OH_raw_loc_old)[0]
 	if verbose: print(' > > > OH timebase')
-
+	
 	sin1_oh_raw = -get_data(ohtree, sin1_raw_loc_old)[1]
 	if verbose: print(' > > > raw sin1-OH')
 	cos1_oh_raw = get_data(ohtree, cos1_raw_loc_old)[1]
 	if verbose: print(' > > > raw cos1-OH')
 	OHcurrent_raw = get_data(ohtree, OH_raw_loc_old)[1]
 	if verbose: print(' > > > raw I_OH')
-
+	
 	#	rog_tb = get_data(ohtree,OH_raw_loc_old)[0]
 	#	print('    >>> rog_tb')
-
+	
 	vftree = get_tree_conn(vf_pickup_shot)
 	sin1_vf_raw = -get_data(vftree, sin1_raw_loc_old)[1]
 	if verbose: print(' > > > raw sin1-VF')
@@ -549,7 +544,7 @@ def GetFixedPickups(verbose=True):
 	if verbose: print(' > > > raw cos1-VF')
 	VFcurrent_raw = get_data(vftree, VF_raw_loc_old)[1]
 	if verbose: print(' > > > raw I_VF')
-
+	
 	if verbose: print(' > > > Took {0} seconds'.format(timetools.clock() - fixedpickups_st))
 	return IP_tf_pickup, sin1_tf_pickup, cos1_tf_pickup, t_ohbias_trig, oh_start_trig, sin1_oh_raw, cos1_oh_raw, OHcurrent_raw, rog_tb, sin1_vf_raw, cos1_vf_raw, VFcurrent_raw
 
@@ -568,18 +563,18 @@ def calc_r_major(tree, t_start=None, t_end=None, times=None, tf_sub=False):
 		<r_major>: vector of major radius values IN METERS at requested time range or time points, or all points if not specified (array of float)
 		<times>: vector of time values IN SECONDS at requested time range, only returned if timebase arguments are used (array of float)
 	'''
-
+	
 	# Determined by Daisuke during copper plasma calibration
 	a = .00643005
 	b = -1.10423
 	c = 48.2567
-
+	
 	# Calculated by Jeff, but still has errors
 	vf_pickup = 0.0046315133 * -1e-3
 	oh_pickup = 7.0723416e-08
-
+	
 	return_times = times is None
-
+	
 	# Read raw signal
 	if times is None:
 		raw_end = t_end
@@ -587,20 +582,20 @@ def calc_r_major(tree, t_start=None, t_end=None, times=None, tf_sub=False):
 		raw_end = times[-1] + 2 * (times[1] - times[0])
 	(cos1_times, cos1_raw) = get_data(tree, '.sensors.rogowskis:cos_1:raw',
 	                                  t_end=raw_end)
-
+	
 	# Subtract offset
 	offset_time = 0
 	offset_mask = cos1_times > offset_time
 	cos1_raw -= cos1_raw[~offset_mask].mean()
-
+	
 	if tf_sub:
 		# tree2 = MDSplus.Tree('hbtep2', 74453) # 6.1kV reference shot
 		tree2 = get_tree_conn(74453)
-
+		
 		# Pickup
 		cos1_p_raw = get_data(tree2, '.devices.west_rack:cpci:input_02',
 		                      times=cos1_times[offset_mask])
-
+		
 		# Offset in pickup
 		#       pre_trig_cos1 = get_data(tree2, '.devices.west_rack:cpci:input_02',
 		#                                  t_end=tree2.getNode('.timing.banks:tf_st').data() * 1e-6)[1]
@@ -610,16 +605,16 @@ def calc_r_major(tree, t_start=None, t_end=None, times=None, tf_sub=False):
 			cos1_p_raw -= pre_trig_cos1.mean()
 		else:
 			raise RuntimeError('No pre-TF data available for offset subtraction in pickup')
-
+		
 		# Subtract corrected offset
 		cos1_raw[offset_mask] -= cos1_p_raw
-
+	
 	# Integrate
 	cos1RC = get_data(tree, '.sensors.rogowskis:cos_1:rc_time')
 	cos1 = (cumtrapz(cos1_raw, cos1_times)
 	        + cos1_raw[:-1] * cos1RC)
 	cos1_times = cos1_times[:-1]
-
+	
 	if times is not None:
 		cos1 = interp1d(cos1_times, cos1)(times)
 	elif t_start is not None:
@@ -628,18 +623,18 @@ def calc_r_major(tree, t_start=None, t_end=None, times=None, tf_sub=False):
 		cos1 = cos1[idx:]
 	else:
 		times = cos1_times
-
+	
 	vf = get_data(tree, '.sensors.vf_current', times=times)
 	oh = get_data(tree, '.sensors.oh_current', times=times)
 	ip = get_data(tree, '.sensors.rogowskis:ip', times=times)
 	# ip *= tree.getNode('.sensors.rogowskis:ip:gain').data()
 	ip *= get_data(tree, '.sensors.rogowskis:ip:gain')
-
+	
 	if len(vf) > len(oh):
 		vf = vf[:len(oh)]
 	else:
 		oh = oh[:len(vf)]
-
+	
 	# print('DIAGNOSTIC: vf = ',len(vf))
 	# print('DIAGNOSTIC: vf_pickup = ',vf_pickup)
 	# print('DIAGNOSTIC: oh = ',len(oh))
@@ -649,12 +644,12 @@ def calc_r_major(tree, t_start=None, t_end=None, times=None, tf_sub=False):
 	# print('DIAGNOSTIC: pickup = ',len(pickup))
 	# print('DIAGNOSTIC: cos1 = ',len(cos1))
 	ratio = ip / (cos1 - pickup)
-
+	
 	arg = b ** 2 - 4 * a * (c - ratio)
 	arg[arg < 0] = 0
 	r_major = (-b + sqrt(arg)) / (2 * a)
 	r_major /= 100  # Convert to meters
-
+	
 	if return_times:
 		return (times, r_major)
 	else:
@@ -672,22 +667,22 @@ def calc_r_minor(r_major, vpos=None):
 	Returns:
 	<r_minor>: minor radius IN METERS; piggybacks on r_major timebase (array of float)
 	'''
-
+	
 	if vpos is None:
 		vpos = zeros(len(r_major))
-
+	
 	r_minor = empty_like(r_major)
 	r_minor[:] = 0.15 - abs(vpos)  # Up/down limited
-
+	
 	mask = r_major > (0.92) + abs(vpos)
 	r_minor[mask] = 1.07 - r_major[mask]  # Outboard limited
-
+	
 	mask = r_major < (0.92 - 0.01704) - abs(vpos)
 	r_minor[mask] = r_major[mask] - 0.75296  # Inboard limited
-
+	
 	mask = r_minor < 0.
 	r_minor[mask] = zeros(len(r_minor))[mask]
-
+	
 	return r_minor
 
 
@@ -765,26 +760,26 @@ def calc_q(tree, times, r_major=None, r_minor=None, I_P=None):
 	Note:
 		TF has been measured at roughly 15% higher than TF probe data; can correct for this by multiplying return value by 1.15, if desired
 	'''
-
+	
 	if r_major is None:
 		r_major = calc_r_major(tree, times=times)
-
+	
 	if r_minor is None:
 		r_minor = calc_r_minor(r_major)
-
+	
 	ip = get_data(tree, '.sensors.rogowskis:ip', times=times)
-
+	
 	# FIXME: TF probe has pickup from VF and OH
 	tf = get_data(tree, '.sensors.tf_probe', times=times)
 	tf *= get_data(tree, '.sensors:tf_probe:mr') / r_major
-
+	
 	q = r_minor ** 2 * tf / (2e-7 * ip * r_major)
-
+	
 	if I_P is None:
 		I_P = 50000. * ones(len(q))
 	mask = I_P[:len(q)] < 6000.
 	q[mask] = k * ones(len(mask))
-
+	
 	return q
 
 
