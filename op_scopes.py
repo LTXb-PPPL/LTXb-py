@@ -282,7 +282,9 @@ def ops_scope(shots, nbi_win=False, nbi_tree=False, v_thresh=1000.):
 
 
 if __name__ == '__main__':
-	nbi_ops([103617], arc_iv=True, nbi_win=[.46, .475])
+	nbi_ops([103617, 103465], arc_iv=True, nbi_win=[.46, .475])
+	# nbi_ops([103465], arc_iv=True, nbi_win=[.46, .475])
+	plt.show()
 	
 	fig, ax = plt.subplots()
 	tr = get_tree_conn(101826)
