@@ -9,6 +9,9 @@ from matplotlib import ticker
 from scipy.io import netcdf
 import numpy as np
 import matplotlib.pyplot as plt
+import MDSplus
+
+from helpful_stuff import read_transp_cdf
 
 
 class FBM:
@@ -169,6 +172,121 @@ class Halo3D:
 		plt.ylabel('#/cm^3')
 
 
+class SimpleCDF:
+	"""Structured in a compatible way to SimpleSignal, we look for TRANSP data in a CDF file
+	"""
+	
+	def __init__(self, shot, cdf, name):
+		local_dir = '//samba/wcapecch/transp_rawdata/'
+		
+		# Initialize the fields of the simpleSignal class to be the input of
+		# the constructor.
+		self.shot = shot
+		self.nodepath = name
+		self.tree = 'local_CDF_file'
+		self.data = None
+		self.dataunits = None
+		self.ndim = None
+		self.dim1 = None
+		self.dim1units = None
+		self.dim2 = None
+		self.dim2units = None
+		self.dim3 = None
+		self.dim3units = None
+		self.error = None
+		self.name = None
+		self.label = None
+		self.goodshot = None  # indicates whether or not a shot exists in tree with any data
+		
+		if name.upper() in cdf.keys():
+			dat = cdf[name.upper()]
+			self.data = dat.data  # .transpose()  # need transpose here for some reason for good plotting
+			self.dataunits = dat.units
+			self.ndim = dat.data.ndim
+			if self.ndim >= 1:
+				dim1 = cdf[dat.dimensions[0]]
+				if dim1.data.ndim == 1:
+					self.dim1 = dim1.data
+					self.dim1units = dim1.units
+				else:  # dim1 has multiple dimensions
+					# ASSUME FOR NOW IT ALWAYS GOES:: time, data
+					islice = np.where(np.array(dim1.dimensions) == dat.dimensions[0])[0][0]
+					if islice != 1:
+						a = 1
+					self.dim1 = dim1.data[0, :]
+					self.dim1units = dim1.units
+			if self.ndim >= 2:
+				# NOTE for some reason coming from MDSPlus we get time on 2nd dimension
+				# So here we're flipping to correct for difference between MDSPlus and CDF data pull
+				self.dim2 = self.dim1
+				self.dim2units = self.dim1units
+				dim1 = cdf[dat.dimensions[1]]
+				if dim1.data.ndim == 1:
+					self.dim1 = dim1.data
+					self.dim1units = dim1.units
+				else:  # dim1 has multiple dimensions
+					# ASSUME FOR NOW IT ALWAYS GOES:: time, data
+					islice = np.where(np.array(dim1.dimensions) == dat.dimensions[1])[0][0]
+					if islice != 1:
+						a = 1
+					self.dim1 = dim1.data[0, :]
+					self.dim1units = dim1.units
+			if self.ndim >= 3:
+				a = 1  # what signal is this??
+			self.error = None
+			self.name = name
+			self.label = name
+			self.goodshot = True
+		else:
+			self.goodshot = False
+	
+	def plot(self, title=None, contour=False, label=None, ax=None, fontsize=None):
+		"""Plot the signal vs. time using as much of the stored
+		 information as is available to annotate the figure. Set the
+		 color of the plot line using, e.g. color='b' for blue."""
+		
+		if ax is None:
+			fig = plt.figure()
+		if fontsize is not None:
+			plt.rcParams.update({'font.size': fontsize})
+		if self.ndim == 1:
+			plt.plot(self.dim1, self.data, label=label)
+			plt.xlabel('x ({})'.format(self.dim1units))
+			plt.ylabel('{} ({})'.format(self.label, self.dataunits))
+		elif self.ndim == 2:
+			if contour:
+				if ax is None:
+					ax = plt.axes()
+				ax.contourf(self.dim1, self.dim2, self.data)
+				plt.title('{} ({})'.format(self.label, self.dataunits))
+			else:
+				if ax is None:
+					ax = plt.axes(projection='3d')
+				xx, yy = np.meshgrid(self.dim1, self.dim2)
+				ax.plot_surface(xx, yy, self.data, cmap='viridis')
+				ax.set_zlabel('{} ({})'.format(self.label, self.dataunits))
+			ax.set_xlabel('x ({})'.format(self.dim1units))
+			ax.set_ylabel('y ({})'.format(self.dim2units))
+			ax.set_title(title)
+		elif self.ndim == 3:
+			num = len(self.data)  # len here gives length of 1st dimension
+			xx, yy = np.meshgrid(self.dim2, self.dim3)  # assume dim1 is time axis
+			iplot = [int(ii) for ii in np.linspace(0, len(self.dim1) - 1, num=3)]
+			for n, i in enumerate(iplot):
+				if contour:
+					ax = fig.add_subplot(3, 1, n + 1)
+					ax.contourf(self.dim2, self.dim3, self.data[:, :, i],
+					            label='{} ({})'.format(self.label, self.dataunits))
+					ax.legend()
+				else:
+					ax = fig.add_subplot(3, 1, n + 1, projection='3d')
+					ax.plot_surface(xx, yy, self.data[:, :, i], cmap='viridis')
+					ax.set_zlabel('{} ({})'.format(self.label, self.dataunits))
+					ax.set_title('t: {}'.format(self.dim1[i]))
+				ax.set_xlabel('x ({})'.format(self.dim1units))
+				ax.set_ylabel('y ({})'.format(self.dim2units))
+
+
 if __name__ == '__main__':
 	# EXAMPLE usage of FBM class
 	fn = 'Z:/wcapecch/transp/t111539/111539F04_fi_3.cdf'
@@ -179,3 +297,13 @@ if __name__ == '__main__':
 	fn = 'Z:/wcapecch/transp_rawdata/103617C02_boxn0_5.cdf'
 	halo3d = Halo3D(fn)
 	halo3d.plot(label='')
+
+	# EXAMPLE usage of SimpleCDF
+	run = 1000022029
+	cdf = read_transp_cdf(run)
+	if cdf is not None:
+		bsorb_h = SimpleCDF(run, cdf, 'BSORB_H')
+		sbdepmc_h = SimpleCDF(run, cdf, 'SBDEPMC_H')
+		shinethru = SimpleCDF(run, cdf, 'SBSHINE_H')
+		sinj = SimpleCDF(run, cdf, 'SINJ')
+		bdens = SimpleCDF(run, cdf, 'BDENS2_H')  # used in Bill's method of coupled fraction

@@ -195,7 +195,7 @@ def ltx_limiter():
 	nlim = numel(rlimiter);
 	fclose(myFile);
 	'''
-	lim_fn = '//samba/wcapecch/python/ltx_limiter.txt'
+	lim_fn = 'ltx_limiter.txt'
 	f = open(lim_fn, 'r')
 	form = r'-?\d+.\d+E[+-]\d+'
 	nn = int(re.findall(r'\d+', f.readline())[0])
@@ -234,79 +234,6 @@ def color_cycle_demo():
 	# plt.plot(np.arange(10), clrs[0])
 	# plt.plot(np.arange(10) * 1.5, clrs[1])
 	a = 1
-
-
-def plot_deposition_fractions(x, runs, ax, beamon=None, beamduration=None, overplot=0, label='', plot=True):
-	if beamon is None:
-		beamon = np.zeros_like(runs)
-	if beamduration is None:
-		beamduration = np.ones_like(runs) * 30.e-6
-	coupl_arr = []  # num coupled @ beamoff
-	pr_loss_arr = []  # num prompt loss @ beamoff
-	num_inj_arr = []  # num injected @ beamoff
-	num_shin_arr = []  # num shinethru @ beamoff
-	for i, run in enumerate(runs):
-		go = 0
-		while not go:
-			bdens = SimpleSignal(run, '\\bdens2_h')
-			bmvol = SimpleSignal(run, '\\bmvol')
-			ne = SimpleSignal(run, '\\ne')
-			shinethru = SimpleSignal(run, '\\sbshine_h')  # num/sec
-			sinj = SimpleSignal(run, '\\sinj')  # num/sec
-			dep = SimpleSignal(run, '\\sbdepsc_h')  # \\sinj - \\sbshine_h  #dep/sec
-			if sinj.data is not None and bmvol.data is not None and shinethru.data is not None: go = 1
-		n0 = ne.data[0, 0]  # num/cm^3
-		ntot = [np.sum(bdens.data[s, :] * bmvol.data[s, :]) for s in np.arange(len(bmvol.dim2))]
-		dt = float(dep.dim1[2] - dep.dim1[1])
-		num_dep = np.sum(dep.data) * dt  # total # of beam neutrals deposited during beam blip
-		num_inj = np.sum(sinj.data) * dt
-		num_shi = np.sum(shinethru.data) * dt
-		# coupl_arr.append(1.-num_shi/num_inj)  # 1-shinethru
-		
-		num_lost = num_dep - np.array(
-			ntot)  # number particles lost vs time, ie those deposited minus those remaining in bdens
-		# ibeamoff = max(np.where(bdens.dim2 < beamon[i] + beamduration[i] + 1.e-6)[0])
-		ibeamoff = np.where(num_lost == min(num_lost))[0][0]
-		pr_loss_arr.append(num_lost[ibeamoff])
-		coupl_arr.append(ntot[ibeamoff])  # how many remain in bdens at beamoff
-		num_inj_arr.append(num_inj)
-		num_shin_arr.append(num_shi)
-		
-		print('\n{} :: x {}'.format(run, x[i]))
-		print('num_inj = {:.2e}'.format(num_inj))
-		print('check 1 = {:.2f}'.format(num_lost[ibeamoff] / min(num_lost)))
-		# print('check 1 = {:.2f}'.format((num_shi + num_dep) / num_inj))
-		# print('check 1 = {:.2f}'.format((num_inj - num_shi) / (pr_loss_arr[-1] + coupl_arr[-1])))
-		print('shinethru = {:.2f}%'.format(num_shi / num_inj * 100.))
-		print('n0 = {:.2e}(cm^-3)'.format(n0))
-		print('dep@beam_off = {:.2e}'.format(coupl_arr[i]))
-	coupl_arr, pr_loss_arr, num_shin_arr, num_inj_arr = np.array(coupl_arr), np.array(pr_loss_arr), np.array(
-		num_shin_arr), np.array(num_inj_arr)
-	coupl_frac = coupl_arr / num_inj_arr
-	prl_frac = pr_loss_arr / num_inj_arr
-	shi_frac = num_shin_arr / num_inj_arr
-	ion_frac = 1. - shi_frac
-	
-	if overplot:
-		frac_coupled_of_deposited = coupl_arr / (num_inj_arr - num_shin_arr)
-		frac_promptl_of_deposited = pr_loss_arr / (num_inj_arr - num_shin_arr)
-		print('\nruns :: {}'.format(runs))
-		print('check=1:: {}'.format(coupl_frac / (frac_coupled_of_deposited * ion_frac)))
-		print('ionized fraction: {}'.format(ion_frac))
-		print('coupled frac of depos: {}'.format(frac_coupled_of_deposited))
-		print('coupled frac of injec: {}'.format(coupl_frac))
-		if plot:
-			ax.plot(x, frac_coupled_of_deposited, label='coupled {}'.format(label))
-			ax.plot(x, frac_promptl_of_deposited, '--', label='prompt loss {}'.format(label))
-	else:
-		if plot:
-			ax.fill_between(x, np.zeros_like(coupl_arr), coupl_frac, label='coupled {}'.format(label), alpha=0.5)
-			ax.fill_between(x, coupl_frac, coupl_frac + prl_frac, label='prompt loss {}'.format(label), alpha=0.5)
-			ax.fill_between(x, coupl_frac + prl_frac, coupl_frac + prl_frac + shi_frac,
-			                label='shinethru {}'.format(label),
-			                alpha=0.5)
-			ax.plot(x, coupl_frac, 'k+-')
-			ax.plot(x, coupl_frac + prl_frac, 'k+-')
 
 
 class SimpleSignal:
@@ -473,6 +400,26 @@ class SimpleSignal:
 				ax.set_ylabel('y ({})'.format(self.dim2units))
 
 
+def read_transp_cdf(run, local_dir='//samba/wcapecch/transp_rawdata/'):
+	# NOTE this is poorly outfitted- requires looking in /12/ directory which may not be the case
+	import os
+	from scipy.io import netcdf
+	print("Looking for CDF data for run {}... be patient".format(run))
+	# convert numeric into alpha-numeric
+	cdf_fn = str(run)[:6] + chr(ord('@') + int(str(run)[6:8])) + str(run)[8:] + '.CDF'
+	if os.path.isdir('//p/transparch/result/LTX/12/'):
+		dir = '//p/transparch/result/LTX/12/'
+	else:
+		print(f'Running locally... searching {local_dir}')
+	fp = '{}{}'.format(local_dir, cdf_fn)
+	if os.path.isfile(fp):
+		cdf = netcdf.netcdf_file(fp, 'r', mmap=False).variables
+		return cdf
+	else:
+		print('TRANSP cdf {} NOT FOUND in {}'.format(cdf_fn, dir))
+		return None
+
+
 def smooth(x, window_len=11, window='hanning'):
 	"""smooth the data using a window with requested size.
 
@@ -529,6 +476,7 @@ def smooth(x, window_len=11, window='hanning'):
 
 
 if __name__ == '__main__':
+	ltx_limiter()
 	read_nenite('//samba/wcapecch/datasets/LTX_100981_468-1_5.nenite')
 
 # eqdsk = 'Z:/datasets/LTX_100981_468-2_0.eqdsk'
