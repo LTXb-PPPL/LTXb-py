@@ -12,6 +12,12 @@ import glob
 import os
 
 
+def closest(array, value):
+	array = np.asarray(array)
+	idx = (np.abs(array - value)).argmin()
+	return array[idx], idx
+
+
 def get_current_ltx_shot():
 	# latest shot in 'ltx_b' tree
 	shotdone = open('Y:\\maindata\\shotdone', 'r')

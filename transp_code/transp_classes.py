@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import MDSplus
 
-from helpful_stuff import read_transp_cdf
+from helpful_stuff import read_transp_cdf, closest
 
 
 class FBM:
@@ -126,6 +126,7 @@ class FBM:
 
 class Halo3D:
 	def __init__(self, cdf_file, label=None):
+		print(f'Reading in {cdf_file}... be patient')
 		cdf = netcdf.netcdf_file(cdf_file, 'r', mmap=False)
 		vars = cdf.variables
 		self.cdf_file = cdf_file
@@ -150,14 +151,14 @@ class Halo3D:
 		self.ybox_desc = vars['YBOX'].YBOX
 		self.lbox = vars['LBOX'].data
 		self.lbox_desc = vars['LBOX'].LBOX
-		self.boxn0 = vars['BOXN0'].data
+		self.boxn0 = vars['BOXN0'].data  # [NLBOX, NYBOX, NXBOX, NBBOX] (reverse of in desc)
 		self.boxn0_desc = vars['BOXN0'].BOXN0
 		self.boxn0h0 = vars['BOXN0H0'].data
 		self.boxn0h0_desc = vars['BOXN0H0'].BOXN0H0
 		self.boxn0hh = vars['BOXN0HH'].data
 		self.boxn0hh_desc = vars['BOXN0HH'].BOXN0HH
 		self.dx = self.xbox[1] - self.xbox[0]  # cm
-		self.dy = self.ybox[1] - self.ybox[1]  # cm
+		self.dy = self.ybox[1] - self.ybox[0]  # cm
 		self.dl = self.lbox[1] - self.lbox[0]  # cm
 		self.dv = self.dx * self.dy * self.dl  # cm^3
 		self.n0_vs_lbox = np.sum(self.boxn0[:, :, :, 0], axis=(1, 2))  # sum over x, y  #/cm^3 vs lbox
@@ -165,11 +166,49 @@ class Halo3D:
 		cdf.close()
 		print('N0_tot = {:.4e}'.format(np.sum(self.num_vs_lbox)))
 	
-	def plot(self, label=None):
+	def plot(self, xslice=None, yslice=None, lslice=None, label=None, nbeam=1):
+		nplots = 1
+		if xslice is not None:
+			nplots += 1
+		if yslice is not None:
+			nplots += 1
+		if lslice is not None:
+			nplots += 1
 		fig = plt.figure(self.cdf_file)
-		plt.plot(self.lbox, self.n0_vs_lbox)
-		plt.xlabel('LBOX (cm)')
-		plt.ylabel('#/cm^3')
+		ax = fig.add_subplot(1, nplots, 1)
+		ax.plot(self.lbox, self.n0_vs_lbox)
+		ax.set_xlabel('LBOX (cm)')
+		ax.set_ylabel('#/cm^3')
+		iplot = 2
+		if xslice is not None:
+			val, ix = closest(self.xbox, xslice)
+			xax = fig.add_subplot(1, nplots, iplot, projection='3d')
+			iplot += 1
+			yy, ll = np.meshgrid(self.ybox, self.lbox)
+			xax.plot_surface(yy, ll, self.boxn0[:, :, ix, nbeam - 1], cmap='viridis')
+			xax.set_zlabel('n0 (#/cm^3)')
+			xax.set_xlabel('YBOX (cm)')
+			xax.set_ylabel('LBOX (cm)')
+			xax.set_title(f'Slice at XBOX={val}cm')
+		if yslice is not None:
+			val, iy = closest(self.ybox, yslice)
+			yax = fig.add_subplot(1, nplots, iplot, projection='3d')
+			iplot += 1
+			xx, ll = np.meshgrid(self.xbox, self.lbox)
+			yax.plot_surface(xx, ll, self.boxn0[:, iy, :, nbeam - 1], cmap='viridis')
+			yax.set_zlabel('n0 (#/cm^3)')
+			yax.set_xlabel('XBOX (cm)')
+			yax.set_ylabel('LBOX (cm)')
+			yax.set_title(f'Slice at YBOX={val}cm')
+		if lslice is not None:
+			val, il = closest(self.lbox, lslice)
+			lax = fig.add_subplot(1, nplots, iplot, projection='3d')
+			xx, yy = np.meshgrid(self.xbox, self.ybox)
+			lax.plot_surface(xx, yy, self.boxn0[il, :, :, nbeam - 1], cmap='viridis')
+			lax.set_zlabel('n0 (#/cm^3)')
+			lax.set_xlabel('XBOX (cm)')
+			lax.set_ylabel('YBOX (cm)')
+			lax.set_title(f'Slice at LBOX={val}cm')
 
 
 class SimpleCDF:
@@ -288,22 +327,29 @@ class SimpleCDF:
 
 
 if __name__ == '__main__':
-	# EXAMPLE usage of FBM class
-	fn = 'Z:/wcapecch/transp/t111539/111539F04_fi_3.cdf'
-	fbm = FBM(fn)
-	fbm.plot(label='')
+	do_fbm_example = 0
+	if do_fbm_example:
+		# EXAMPLE usage of FBM class
+		fn = 'Z:/transp/t111539/111539F04_fi_3.cdf'
+		fbm = FBM(fn)
+		fbm.plot(label='')
 	
-	# EXAMPLE usage of Halo3D class
-	fn = 'Z:/wcapecch/transp_rawdata/103617C02_boxn0_5.cdf'
-	halo3d = Halo3D(fn)
-	halo3d.plot(label='')
-
-	# EXAMPLE usage of SimpleCDF
-	run = 1000022029
-	cdf = read_transp_cdf(run)
-	if cdf is not None:
-		bsorb_h = SimpleCDF(run, cdf, 'BSORB_H')
-		sbdepmc_h = SimpleCDF(run, cdf, 'SBDEPMC_H')
-		shinethru = SimpleCDF(run, cdf, 'SBSHINE_H')
-		sinj = SimpleCDF(run, cdf, 'SINJ')
-		bdens = SimpleCDF(run, cdf, 'BDENS2_H')  # used in Bill's method of coupled fraction
+	do_halo3d_example = 1
+	if do_halo3d_example:
+		# EXAMPLE usage of Halo3D class
+		fn = 'Z:/transp_rawdata/103617C03_boxn0_2.cdf'
+		halo3d = Halo3D(fn)
+		halo3d.plot(label='', xslice=0.1, yslice=-5., lslice=200.)
+		plt.show()
+	
+	do_simplecdf_example = 0
+	if do_simplecdf_example:
+		# EXAMPLE usage of SimpleCDF
+		run = 1000022029
+		cdf = read_transp_cdf(run)
+		if cdf is not None:
+			bsorb_h = SimpleCDF(run, cdf, 'BSORB_H')
+			sbdepmc_h = SimpleCDF(run, cdf, 'SBDEPMC_H')
+			shinethru = SimpleCDF(run, cdf, 'SBSHINE_H')
+			sinj = SimpleCDF(run, cdf, 'SINJ')
+			bdens = SimpleCDF(run, cdf, 'BDENS2_H')  # used in Bill's method of coupled fraction
