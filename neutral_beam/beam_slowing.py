@@ -8,11 +8,34 @@ qe = 1.60218e-19  # electron charge [C]
 eps0 = 8.85419e-12  # vacuum permittivity [A^2*s^4/m^3/kg]
 
 
-def plot_collision_freqs(axs=None):
+def plot_fractional_energy_transfer(eb=20000, mb=1., mi=1., interps=None):
+	t_crit = .342 * (me / (mi * mp)) ** (1 / 3) / (1 + (mb / mi)) ** (2 / 3) * eb  # [eV]
+	print(f'T_crit: {t_crit}eV')
+	tt = np.linspace(0, 2 * t_crit)
+	fe = t_crit / (t_crit + tt)  # fraction of energy to electrons
+	fi = tt / (t_crit + tt)  # fraction to ions
+	if interps is not None:
+		f_e, f_i = np.interp(interps, tt, fe), np.interp(interps, tt, fi)
+		print(f'Fractions at {interps} are to elec: {f_e}, ions: {f_i}')
+	# plt.axvline(interps, c='k', ls='--')
+	plt.plot(tt, fe, label='fraction to e')
+	plt.plot(tt, fi, label='fraction to i')
+	plt.legend()
+	plt.xlabel('T (eV)')
+
+
+# plt.show()
+
+
+def plot_collision_freqs(axs=None, ls='-', showlegend=True):
 	if axs is None:
 		fig, axs = plt.subplots(2, 2, sharex='col')
 		y0max = y1max = 0
 	else:
+		axs[0, 0].set_prop_cycle(None)
+		axs[1, 0].set_prop_cycle(None)
+		axs[0, 1].set_prop_cycle(None)
+		axs[1, 1].set_prop_cycle(None)
 		y0max = axs[0, 0].get_ylim()[1]
 		y1max = axs[1, 0].get_ylim()[1]
 	axr = axs[1, 0].twinx()
@@ -52,27 +75,29 @@ def plot_collision_freqs(axs=None):
 	print('t_therm: {}s'.format(t_therm))
 	
 	pmax = max([nu_be_in, nu_bi_in, y0max])
-	axs[0, 0].plot(eb_arr / 1000., nu_be, label='nu_be: Te={}eV'.format(te))
-	axs[0, 0].plot(eb_arr / 1000., nu_bi, label='nu_bi: Ti={}eV'.format(ti))
+	nube, = axs[0, 0].plot(eb_arr / 1000., nu_be, ls=ls, label='nu_be')
+	nubi, = axs[0, 0].plot(eb_arr / 1000., nu_bi, ls=ls, label='nu_bi')
 	axs[0, 0].axvline(eb / 1000., c='k', alpha=0.5, ls='--')
 	axs[0, 0].annotate('Ebeam', (eb / 1000., 0.5 * pmax))
 	axs[0, 0].axvline(ecrit_ev / 1000., c='k', alpha=0.5, ls='-.')
 	axs[0, 0].annotate('Ecrit', (ecrit_ev / 1000., 0.5 * pmax))
-	axs[0, 0].set_ylabel('Collision Frequency [s^-1]')
+	axs[0, 0].set_ylabel('Collision Freq [s^-1]')
 	axs[0, 0].set_ylim((0, 1.3 * pmax))
-	axs[0, 0].legend()
+	if showlegend:
+		axs[0, 0].legend([nube, nubi], ['nu_be', 'nu_bi'], fontsize=9)
 	
 	dpedt = nu_be * Ab * mp * vb_arr  # momentum transfer to electrons (see Friedberg eq 9.26)
 	dpidt = nu_bi * Ab * mp * vb_arr  # [kgm/s/s]
 	dpdt = dpedt + dpidt  # total momentum transfer rate [kgm/s/s]
 	pmax = max([nu_be_in * Ab * mp * vb, nu_bi_in * Ab * mp * vb, y1max])
-	axs[1, 0].plot(eb_arr / 1000., dpedt, label='e: Te={}eV'.format(te))
-	axs[1, 0].plot(eb_arr / 1000., dpidt, label='i: Ti={}eV'.format(ti))
-	axs[1, 0].plot(eb_arr / 1000., dpdt, label='tot')
+	e10, = axs[1, 0].plot(eb_arr / 1000., dpedt, ls=ls)
+	i10, = axs[1, 0].plot(eb_arr / 1000., dpidt, ls=ls)
+	t10, = axs[1, 0].plot(eb_arr / 1000., dpdt)
 	axs[1, 0].set_xlabel('Beam Energy [keV]')
 	axs[1, 0].set_ylabel('dp/dt')
 	axs[1, 0].set_ylim((0, 1.3 * pmax))
-	axs[1, 0].legend()
+	if showlegend:
+		axs[1, 0].legend([e10, i10, t10], ['e', 'i', 'tot'], fontsize=9)
 	
 	dvdt = dpdt / Ab / mp
 	dt = 1.e-6  # timestep
@@ -86,12 +111,12 @@ def plot_collision_freqs(axs=None):
 		a_t.append(np.interp(v_t[-1], vb_arr, dvdt))
 	print('t_therm (numerical): {}s'.format(t[-1]))
 	
-	axs[0, 1].plot(t, np.array(v_t) / 1.e6, label='Te={}eV'.format(te))
+	axs[0, 1].plot(t, np.array(v_t) / 1.e6, ls=ls)  # , label='Ti={}eV'.format(ti))
 	axs[0, 1].set_ylabel('v(t) [Mm/s]')
-	axs[0, 1].legend()
-	axs[1, 1].plot(t, np.array(a_t) / 1.e9, label='Te={}eV'.format(te))
+	# axs[0, 1].legend()
+	axs[1, 1].plot(t, np.array(a_t) / 1.e9, ls=ls)  # , label='Ti={}eV'.format(ti))
 	axs[1, 1].set_ylabel('a(t) [Gm/s^2]')
-	axs[1, 1].legend()
+	# axs[1, 1].legend()
 	a = 1
 	return axs
 
@@ -99,8 +124,8 @@ def plot_collision_freqs(axs=None):
 if __name__ == '__main__':
 	
 	demo = 0
+	frac_demo = 1
 	show1036170301 = 1
-	
 	if demo:
 		te = 100  # plasma electron temp [eV]
 		ti = 100  # plasma ion temp [eV]
@@ -113,7 +138,8 @@ if __name__ == '__main__':
 		te = 200
 		ti = 200
 		plot_collision_freqs(axs=axs)
-		plt.show()
+	if frac_demo:
+		plot_fractional_energy_transfer(eb=11.e3, mb=1, mi=1, interps=[150, 250])
 	if show1036170301:
 		# run
 		# psigs = ['\\te', '\\ti', '\\ni', '\\ne']
@@ -136,5 +162,7 @@ if __name__ == '__main__':
 		ti = 250.
 		ni = 1.75e19
 		ne = 2.e19
-		plot_collision_freqs(axs)
-		plt.show()
+		plot_collision_freqs(axs, ls='--', showlegend=False)
+	
+	plt.tight_layout()
+	plt.show()

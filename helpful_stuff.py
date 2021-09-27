@@ -7,9 +7,37 @@ import numpy as np
 import MDSplus
 import re
 import datetime
-from bills_LTX_MDSplus_toolbox import get_tree_conn
+from bills_LTX_MDSplus_toolbox import get_tree_conn, get_data
 import glob
 import os
+
+
+def is_good_shot(shot, sigs, treename='ltx_b'):
+	good_shot = True
+	tree = get_tree_conn(shot, treename=treename)
+	for sig in sigs:
+		try:
+			(_, _) = get_data(tree, sig)
+		except:
+			good_shot = False
+	return good_shot
+
+
+def is_nbi_shot(shot, tree=None):
+	if tree is None:
+		tree = get_tree_conn(shot)
+	if shot < 200000:
+		i_arc_node = '.oper_diags.ltx_nbi.source_diags.i_arc'
+	else:
+		i_arc_node = '.ltx_nbi.source_diags.i_arc'
+	times = None
+	try:
+		(times, dat) = get_data(tree, i_arc_node)
+		nbi_shot = True
+	except MDSplus.mdsExceptions.TreeNODATA:
+		nbi_shot = False
+		print('shot #{} is NOT a beam shot'.format(shot))
+	return nbi_shot
 
 
 def closest(array, value):
@@ -24,6 +52,32 @@ def get_current_ltx_shot():
 	shot = int(shotdone.read())
 	
 	return shot
+
+
+def get_shots_since(date='09/01/21', nbi=True):
+	since = datetime.datetime.strptime(date, '%m/%d/%y')
+	
+	lastshot = get_current_ltx_shot()
+	shot_arr = []
+	while 1:
+		print(lastshot)
+		try:
+			t = get_tree_conn(lastshot, treename='ltx_b')
+			ts = get_data(t, '.metadata.timestamp')
+			dt = datetime.datetime.strptime(ts, '%m/%d/%y %I:%M:%S %p')
+			if dt < since:
+				break
+			
+			if nbi:
+				if is_nbi_shot(lastshot, t):
+					shot_arr.append(lastshot)
+			else:
+				shot_arr.append(lastshot)
+		except MDSplus.mdsExceptions.TreeFILE_NOT_FOUND:
+			print(f'no tree date for shot {lastshot}')
+			pass
+		lastshot -= 1
+	return shot_arr
 
 
 def get_current_nbi_shot(ltx_shotnums=False):
@@ -482,8 +536,10 @@ def smooth(x, window_len=11, window='hanning'):
 
 
 if __name__ == '__main__':
-	ltx_limiter()
-	read_nenite('//samba/wcapecch/datasets/LTX_100981_468-1_5.nenite')
+	ll = get_shots_since(date='09/20/21')
+	a = 1
+# ltx_limiter()
+# read_nenite('//samba/wcapecch/datasets/LTX_100981_468-1_5.nenite')
 
 # eqdsk = 'Z:/datasets/LTX_100981_468-2_0.eqdsk'
 # read_eqdsk(eqdsk)

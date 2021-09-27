@@ -3,7 +3,7 @@ To look for more signals, remote onto NoMachine and run traverser
 open tree "ltx_b" and shot 101602 (for example)
 then navigate around to see which signals are available to plot
 """
-from helpful_stuff import smooth, get_current_ltx_shot
+from helpful_stuff import smooth, get_current_ltx_shot, is_nbi_shot, is_good_shot
 from bills_LTX_MDSplus_toolbox import *
 from shotgroup_database import get_shots
 import matplotlib.pyplot as plt
@@ -110,34 +110,6 @@ def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
 	ax8r.annotate('<P>={:.2f}'.format(pav), (twin1, pav))
 	ax1.set_ylim(bottom=0.)
 	ax2r.set_ylim(bottom=0.)
-
-
-def is_good_shot(shot, sigs, treename='ltx_b'):
-	good_shot = True
-	tree = get_tree_conn(shot, treename=treename)
-	for sig in sigs:
-		try:
-			(_, _) = get_data(tree, sig)
-		except:
-			good_shot = False
-	return good_shot
-
-
-def is_nbi_shot(shot, tree=None):
-	if tree is None:
-		tree = get_tree_conn(shot)
-	if shot < 200000:
-		i_arc_node = '.oper_diags.ltx_nbi.source_diags.i_arc'
-	else:
-		i_arc_node = '.ltx_nbi.source_diags.i_arc'
-	times = None
-	try:
-		(times, dat) = get_data(tree, i_arc_node)
-		nbi_shot = True
-	except MDSplus.mdsExceptions.TreeNODATA:
-		nbi_shot = False
-		print('shot #{} is NOT a beam shot'.format(shot))
-	return nbi_shot
 
 
 def plot_nbi(shots):
@@ -282,7 +254,8 @@ def ops_scope(shots, nbi_win=False, nbi_tree=False, v_thresh=1000.):
 
 
 if __name__ == '__main__':
-	nbi_ops([103617, 103465], arc_iv=True, nbi_win=[.46, .475])
+	nbi_ops([102796], arc_iv=True)
+	nbi_ops([103617], arc_iv=True)#, nbi_win=[.46, .475])
 	# nbi_ops([103465], arc_iv=True, nbi_win=[.46, .475])
 	plt.show()
 	
