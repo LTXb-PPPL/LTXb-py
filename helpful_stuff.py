@@ -60,10 +60,11 @@ def get_shots_since(date='09/01/21', nbi=True):
 	lastshot = get_current_ltx_shot()
 	shot_arr = []
 	while 1:
-		print(lastshot)
+		# print(lastshot)
 		try:
 			t = get_tree_conn(lastshot, treename='ltx_b')
 			ts = get_data(t, '.metadata.timestamp')
+			print(f'shot:{lastshot}, time:{ts}')
 			dt = datetime.datetime.strptime(ts, '%m/%d/%y %I:%M:%S %p')
 			if dt < since:
 				break
@@ -536,7 +537,7 @@ def smooth(x, window_len=11, window='hanning'):
 
 
 if __name__ == '__main__':
-	ll = get_shots_since(date='09/20/21')
+	ll = get_shots_since(date='09/14/21')
 	a = 1
 # ltx_limiter()
 # read_nenite('//samba/wcapecch/datasets/LTX_100981_468-1_5.nenite')
