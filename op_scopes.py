@@ -253,8 +253,48 @@ def ops_scope(shots, nbi_win=False, nbi_tree=False, v_thresh=1000.):
 	ax8.annotate('<P>={:.2f}'.format(pav), (np.mean(tbeam), pav))
 
 
+def quick_perv(shots):
+	for shot in shots:
+		if shot > 200000:
+			treename = 'ltx_nbi'
+			prefix = ''
+			nbi_only = True
+		else:
+			treename = 'ltx_b'
+			prefix = '.oper_diags.ltx_nbi'
+			nbi_only = False
+		try:
+			tree = get_tree_conn(shot, treename=treename)
+			(ti, ib) = get_data(tree, f'{prefix}.source_diags.i_hvps')
+			(tv, vb) = get_data(tree, f'{prefix}.source_diags.v_hvps')
+			ib = np.interp(tv, ti, ib)  # get ib onto vb axis
+			t_beamon = np.where(vb > 5000)  # only look at where beam is above 5kV
+			pad = 0.25e-3  # remove this amt from beginning/end of beam
+			t_window = np.where((tv >= tv[t_beamon[0][0]] + pad) & (tv <= tv[t_beamon[0][-1]] - pad))
+			perv = ones_like(vb)
+			perv[:] = np.nan
+			perv[t_window] = ib[t_window] / vb[t_window] ** 1.5
+			if shot == shots[-1]:
+				plt.plot(tv, perv * 1.e6, 'ko-', markevery=25, label=shot)
+				plt.axhline(np.nanmean(perv) * 1.e6, ls='--', c='k')
+			else:
+				plt.plot(tv, perv * 1.e6, label=shot)
+		except mds.mdsExceptions.TreeNODATA:
+			print(f'trouble fetching MDSPlus data for shot {shot}')
+	plt.axhline(15)
+	plt.xlabel('time (s)')
+	plt.ylabel('perv (e-6)')
+	plt.legend()
+	plt.ylim(bottom=0)
+	plt.show()
+
+
 if __name__ == '__main__':
-	nbi_ops([102796], arc_iv=True)
+	quick_perv([104818, 104822, 104826, 104830, 104831, 104832, 104839, 104842, 104844, 104845, 104847, 104849, 104850,
+	            104853, 104856, 104857, 104858, 104859, 104861, 104862, 104863, 104864, 104865])
+	
+	'''
+	nbi_ops([104584], arc_iv=True, nbi_win=[.46,.475])
 	nbi_ops([103617], arc_iv=True)#, nbi_win=[.46, .475])
 	# nbi_ops([103465], arc_iv=True, nbi_win=[.46, .475])
 	plt.show()
@@ -271,4 +311,5 @@ if __name__ == '__main__':
 	hughes_shots = [100981, 100985, 100988]
 	# nbi_ops(hughes_shots, nbi_win=(0.466, 0.475))
 	nbi_ops(hughes_shots, nbi_win=(0.46, 0.48), arc_iv=True)
+'''
 	plt.show()

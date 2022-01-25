@@ -27,100 +27,225 @@ shots_since_8_1_21 = [103879, 103878, 103877, 103876, 103875, 103874, 103873, 10
                       103609, 103608, 103607, 103606, 103605, 103604, 103603, 103602, 103595, 103593, 103592, 103591,
                       103590, 103589, 103588, 103587, 103586, 103585, 103583, 103582, 103581, 103580, 103579, 103578,
                       103577, 103576, 103575, 103572, 103571, 103570, 103569, 103563, 103562, 103561, 103560]
-shots = shots_since_9_1_21
-
+shots = shots_since_8_1_21
 dir = 'Y:/RTD/'
-norm_rtd = np.zeros((len(shots), 19))  # index of [shot, rtd]
-rtd_arr = np.zeros((len(shots), 19))
-ja, pa = [], []  # shot arrays for joules, av perv
+clrs = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
 dbug = 0
 if dbug:
 	fig2, dax = plt.subplots()
 
-for ish, shot in enumerate(shots):
+
+def do_rtd_analysis():
+	oldshots = 104400 + np.array([18, 20, 21])
+	newshots = 104400 + np.array([15, 16, 17])
+	
+	def rtd_analysis(shots, m, legend=False):
+		norm_rtd = np.zeros((len(shots), 19))  # index of [shot, rtd]
+		rtd_arr = np.zeros((len(shots), 19))
+		ja, pa = [], []  # shot arrays for joules, av perv
+		global ax1, ax2, ax3, fig2, ax11, ax22, ax33
+		for ish, shot in enumerate(shots):
+			lvm_file = f'{dir}{shot}.lvm'
+			if os.path.exists(lvm_file):
+				print(shot)
+				tree = get_tree_conn(shot, treename='ltx_b')
+				(ti, ib) = get_data(tree, '.oper_diags.ltx_nbi.source_diags.i_hvps')
+				(tv, vb) = get_data(tree, '.oper_diags.ltx_nbi.source_diags.v_hvps')
+				ib = np.interp(tv, ti, ib)  # get ib onto vb axis
+				t_beamon = np.where(vb > 5000)  # only look at where beam is above 5kV
+				if len(t_beamon[0]) < 10:
+					ja.append(np.nan)
+					pa.append(np.nan)
+					norm_rtd[ish, :] = np.nan
+					rtd_arr[ish, :] = np.nan
+				else:
+					perv = ones_like(vb)
+					pb = ib * vb  # beam power [W]
+					perv[:] = np.nan
+					perv[t_beamon] = ib[t_beamon] / vb[t_beamon] ** 1.5
+					av_perv = np.mean(perv[np.where((tv >= tv[t_beamon[0][0]]) & (tv <= tv[t_beamon[0][-1]]))])
+					tot_joules = np.sum([pb[i] * (tv[i] - tv[i - 1]) for i in np.arange(1, len(tv))])
+					ja.append(tot_joules)
+					pa.append(av_perv * 1.e6)
+					lvm = lvm_read.read(lvm_file, dump_file=False, read_from_pickle=False)
+					lvm0 = lvm[0]
+					rtd_nam = lvm0['Channel names'][1:20]  # u1-4,l1-4,d1-11
+					for i in np.arange(1, 20):
+						norm_rtd[ish, i - 1] = (max(lvm0['data'][:, i]) - min(lvm0['data'][:, i])) / tot_joules
+						rtd_arr[ish, i - 1] = (max(lvm0['data'][:, i]) - min(lvm0['data'][:, i]))
+						if dbug:
+							dax.plot(lvm0['data'][:, 8:11], label=rtd_nam[8:11])
+			else:
+				ja.append(np.nan)
+				pa.append(np.nan)
+				norm_rtd[ish, :] = np.nan
+				rtd_arr[ish, :] = np.nan
+		# bad signals on D1, D3
+		# norm_rtd[:, 8] = np.nan
+		# norm_rtd[:, 10] = np.nan
+		# rtd_arr[:, 8] = np.nan
+		# rtd_arr[:, 10] = np.nan
+		
+		# for ax in [ax1, ax2, ax3]:
+		# 	ax.set_xlim(left=7.5)
+		# ax.set_ylim(top=2.)
+		if legend:
+			ax1.plot(pa, norm_rtd[:, 0:4] * 1.e3, m, label=rtd_nam[0:4])  # upper scrapers
+			ax2.plot(pa, norm_rtd[:, 4:8] * 1.e3, m, label=rtd_nam[4:8])  # lower scrapers
+			ax3.plot(pa, norm_rtd[:, 8:19] * 1.e3, m, label=rtd_nam[8:19])  # dump
+			plt.tight_layout()
+			ax11.plot(ja, rtd_arr[:, 0:4], m, label=rtd_nam[0:4])  # upper scrapers
+			ax22.plot(ja, rtd_arr[:, 4:8], m, label=rtd_nam[4:8])  # lower scrapers
+			ax33.plot(ja, rtd_arr[:, 8:19], m, label=rtd_nam[8:19])  # dump
+		else:
+			ax1.plot(pa, norm_rtd[:, 0:4] * 1.e3, m)  # upper scrapers
+			ax2.plot(pa, norm_rtd[:, 4:8] * 1.e3, m)  # lower scrapers
+			ax3.plot(pa, norm_rtd[:, 8:19] * 1.e3, m)  # dump
+			plt.tight_layout()
+			ax11.plot(ja, rtd_arr[:, 0:4], m)  # upper scrapers
+			ax22.plot(ja, rtd_arr[:, 4:8], m)  # lower scrapers
+			ax33.plot(ja, rtd_arr[:, 8:19], m)  # dump
+		return ja, rtd_arr, pa, norm_rtd, rtd_nam
+	
+	fig, (ax1, ax2, ax3) = plt.subplots(ncols=3, sharey=True, figsize=(12, 4))
+	fig2, (ax11, ax22, ax33) = plt.subplots(ncols=3, sharey=True, figsize=(12, 4))
+	oja, ortd_arr, opa, onorm_rtd, rtd_nam = rtd_analysis(oldshots, 'o', legend=True)
+	for ax in [ax1, ax2, ax3, ax11, ax22, ax33]:
+		ax.set_prop_cycle(None)  # reset colors
+	nja, nrtd_arr, npa, nnorm_rtd, _ = rtd_analysis(newshots, 's')
+	
+	# ax1t = ax1.twiny()
+	# ax1t.plot(pa, np.transpose(np.transpose(np.outer(np.ones(3), rtd_arr[2, 0:4])) * ja / ja[2]), '--')
+	# ax1t.set_xlabel('Perv (e-6)')
+	# ax2t = ax2.twiny()
+	# ax2t.plot(pa, np.transpose(np.transpose(np.outer(np.ones(3), rtd_arr[2, 4:8])) * ja / ja[2]), '--')
+	# ax2t.set_xlabel('Perv (e-6)')
+	# ax3t = ax3.twiny()
+	# ax3t.plot(pa, np.transpose(np.transpose(np.outer(np.ones(3), rtd_arr[2, 8:19])) * ja / ja[2]), '--')
+	# ax3t.set_xlabel('Perv (e-6)')
+	
+	leg_fs = 10
+	fs = leg_fs + 2
+	ax1.legend(ncol=2, fontsize=leg_fs)
+	ax2.legend(ncol=2, fontsize=leg_fs)
+	ax3.legend(ncol=3, fontsize=leg_fs)
+	ax11.legend(ncol=2, fontsize=leg_fs)
+	ax22.legend(ncol=2, fontsize=leg_fs)
+	ax33.legend(ncol=3, fontsize=leg_fs)
+	for ax in [ax1, ax2, ax3, ax11, ax22, ax33]:
+		ax.tick_params(labelsize=fs)
+	
+	ax1.set_ylabel('$\Delta T/E_{tot}$ ($\degree$C/kJ)', fontsize=fs)
+	ax2.set_xlabel('Perv (e-6)', fontsize=fs)
+	ax1.set_title('Upper', fontsize=fs)
+	ax2.set_title('Lower', fontsize=fs)
+	ax3.set_title('Dump', fontsize=fs)
+	ax11.set_ylabel('$\Delta T$ ($\degree$C)', fontsize=fs)
+	ax22.set_xlabel('$E_{tot}$ (J)', fontsize=fs)
+	ax11.set_title('Upper', fontsize=fs)
+	ax22.set_title('Lower', fontsize=fs)
+	ax33.set_title('Dump', fontsize=fs)
+	
+	plt.tight_layout()
+	
+	ortda = np.mean(ortd_arr, axis=0)
+	nrtda = np.mean(nrtd_arr, axis=0)
+	fig3, axx = plt.subplots()
+	fs = fs + 2
+	axx.plot(rtd_nam, nrtda / ortda, 'o')
+	axx.set_ylabel('Temp Increase Factor', fontsize=fs)
+	axx.tick_params(labelsize=fs)
+	axx.set_xticklabels(rtd_nam, rotation=90)
+
+
+def plot_rtd_sigs(shot):
 	lvm_file = f'{dir}{shot}.lvm'
 	if os.path.exists(lvm_file):
 		print(shot)
-		tree = get_tree_conn(shot, treename='ltx_b')
-		(ti, ib) = get_data(tree, '.oper_diags.ltx_nbi.source_diags.i_hvps')
-		(tv, vb) = get_data(tree, '.oper_diags.ltx_nbi.source_diags.v_hvps')
-		ib = np.interp(tv, ti, ib)  # get ib onto vb axis
-		t_beamon = np.where(vb > 5000)  # only look at where beam is above 5kV
-		if len(t_beamon[0]) < 10:
-			ja.append(np.nan)
-			pa.append(np.nan)
-			norm_rtd[ish, :] = np.nan
-			rtd_arr[ish, :] = np.nan
-		else:
-			perv = ones_like(vb)
-			pb = ib * vb  # beam power [W]
-			perv[:] = np.nan
-			perv[t_beamon] = ib[t_beamon] / vb[t_beamon] ** 1.5
-			av_perv = np.mean(perv[np.where((tv >= tv[t_beamon[0][0]]) & (tv <= tv[t_beamon[0][-1]]))])
-			tot_joules = np.sum([pb[i] * (tv[i] - tv[i - 1]) for i in np.arange(1, len(tv))])
-			ja.append(tot_joules)
-			pa.append(av_perv * 1.e6)
-			
+		# tree = get_tree_conn(shot, treename='ltx_b')
+		# (ti, ib) = get_data(tree, '.oper_diags.ltx_nbi.source_diags.i_hvps')
+		# (tv, vb) = get_data(tree, '.oper_diags.ltx_nbi.source_diags.v_hvps')
+		# ib = np.interp(tv, ti, ib)  # get ib onto vb axis
+		# t_beamon = np.where(vb > 5000)  # only look at where beam is above 5kV
+		# perv = ones_like(vb)
+		# pb = ib * vb  # beam power [W]
+		# perv[:] = np.nan
+		# perv[t_beamon] = ib[t_beamon] / vb[t_beamon] ** 1.5
+		# av_perv = np.mean(perv[np.where((tv >= tv[t_beamon[0][0]]) & (tv <= tv[t_beamon[0][-1]]))])
+		# tot_joules = np.sum([pb[i] * (tv[i] - tv[i - 1]) for i in np.arange(1, len(tv))])
+		lvm = lvm_read.read(lvm_file, dump_file=False, read_from_pickle=False)
+		lvm0 = lvm[0]
+		rtd_nam = lvm0['Channel names'][1:20]  # u1-4,l1-4,d1-11
+		for i in np.arange(1, 9):
+			plt.plot(lvm0['data'][:, 0], lvm0['data'][:, i], label=rtd_nam[i - 1])
+		plt.legend()
+		plt.xlabel('Time (s)')
+		plt.ylabel('Temp (degC)')
+
+
+def avg_perv(shot, Ej=False):
+	tree = get_tree_conn(shot, treename='ltx_b')
+	(ti, ib) = get_data(tree, '.oper_diags.ltx_nbi.source_diags.i_hvps')
+	(tv, vb) = get_data(tree, '.oper_diags.ltx_nbi.source_diags.v_hvps')
+	ib = np.interp(tv, ti, ib)  # get ib onto vb axis
+	# t_beamon = np.where(vb > 5000)  # only look at where beam is above 5kV
+	t_beamon = np.where((.46 < tv) & (tv < .463))  # look between 460-463ms for these shots (ignore rough Ibeam startup)
+	pb = ib * vb  # beam power [W]
+	tot_joules = np.sum([pb[i] * (tv[i] - tv[i - 1]) for i in np.arange(1, len(tv))])
+	if len(t_beamon[0]) < 10:
+		av_perv = np.nan
+	else:
+		perv = ones_like(vb)
+		perv[:] = np.nan
+		perv[t_beamon] = ib[t_beamon] / vb[t_beamon] ** 1.5
+		av_perv = np.nanmean(perv)
+	if Ej:
+		return av_perv, tot_joules
+	else:
+		return av_perv
+
+
+def perveance_scan_rtd_analysis(shots):
+	# plot temp rise on beam dump/scrapers vs avg perveance
+	rtd_arr = np.zeros((19, len(shots)))
+	av_pervs = np.zeros(len(shots))
+	for ish, shot in enumerate(shots):
+		lvm_file = f'{dir}{shot}.lvm'
+		if os.path.exists(lvm_file):
+			print(shot)
+			avp, totj = avg_perv(shot, Ej=True)
+			av_pervs[ish] = avp
 			lvm = lvm_read.read(lvm_file, dump_file=False, read_from_pickle=False)
 			lvm0 = lvm[0]
 			rtd_nam = lvm0['Channel names'][1:20]  # u1-4,l1-4,d1-11
 			for i in np.arange(1, 20):
-				norm_rtd[ish, i - 1] = (max(lvm0['data'][:, i]) - min(lvm0['data'][:, i])) / tot_joules
-				rtd_arr[ish, i - 1] = (max(lvm0['data'][:, i]) - min(lvm0['data'][:, i]))
-			if dbug:
-				dax.plot(lvm0['data'][:, 8:11], label=rtd_nam[8:11])
-	else:
-		ja.append(np.nan)
-		pa.append(np.nan)
-		norm_rtd[ish, :] = np.nan
-		rtd_arr[ish, :] = np.nan
+				rtd_arr[i - 1, ish] = (max(lvm0['data'][:, i]) - min(lvm0['data'][:, i])) / totj
+		else:
+			av_pervs[ish] = np.nan
+			rtd_arr[:, ish] = np.nan
+	
+	isort = np.argsort(av_pervs)
+	fig, (ax1, ax2, ax3) = plt.subplots(ncols=3, sharey=True)
+	for irtd in [0, 1, 2, 3]:  #
+		ax1.plot(av_pervs[isort] * 1.e6, rtd_arr[irtd, :][isort] * 1.e3, 'o-', label=rtd_nam[irtd])
+	for irtd in [4, 5, 6, 7]:
+		ax2.plot(av_pervs[isort] * 1.e6, rtd_arr[irtd, :][isort] * 1.e3, 'o-', label=rtd_nam[irtd])
+	for irtd in [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]:
+		ax3.plot(av_pervs[isort] * 1.e6, rtd_arr[irtd, :][isort] * 1.e3, 'o-', label=rtd_nam[irtd])
+	for ax in [ax1, ax2, ax3]:
+		ax.legend()
+	ax1.set_title('Upper Scrapers')
+	ax2.set_title('Lower Scrapers')
+	ax3.set_title('Far Side Dump')
+	ax2.set_xlabel('Perveance ($x10^{-6}$)')
+	ax1.set_ylabel('$\Delta T/E_{tot}$ ($\degree$C/kJ)')
 
-# bad signals on D1, D3
-norm_rtd[:, 8] = np.nan
-norm_rtd[:, 10] = np.nan
-rtd_arr[:, 8] = np.nan
-rtd_arr[:, 10] = np.nan
 
-fig, (ax1, ax2, ax3) = plt.subplots(ncols=3, sharey=True, figsize=(12, 6))
-ax1.plot(pa, norm_rtd[:, 0:4] * 1.e3, 'o', label=rtd_nam[0:4])  # upper scrapers
-ax2.plot(pa, norm_rtd[:, 4:8] * 1.e3, 'o', label=rtd_nam[4:8])  # lower scrapers
-ax3.plot(pa, norm_rtd[:, 8:19] * 1.e3, 'o', label=rtd_nam[8:19])  # dump
-ax1.set_ylabel('$\Delta T/E_{tot}$ ($\degree$C/kJ)')
-ax2.set_xlabel('Perv (e-6)')
-ax1.set_title('Upper')
-ax2.set_title('Lower')
-ax3.set_title('Dump')
-for ax in [ax1, ax2, ax3]:
-	ax.set_xlim(left=7.5)
-	ax.set_ylim(top=2.)
-
-fig2, (ax11, ax22, ax33) = plt.subplots(ncols=3, sharey=True, figsize=(12, 6))
-ax11.plot(ja, rtd_arr[:, 0:4], 'o', label=rtd_nam[0:4])  # upper scrapers
-ax22.plot(ja, rtd_arr[:, 4:8], 'o', label=rtd_nam[4:8])  # lower scrapers
-ax33.plot(ja, rtd_arr[:, 8:19], 'o', label=rtd_nam[8:19])  # dump
-ax11.set_ylabel('$\Delta T$ ($\degree$C)')
-ax22.set_xlabel('$E_{tot}$')
-ax11.set_title('Upper')
-ax22.set_title('Lower')
-ax33.set_title('Dump')
-for ax in [ax11, ax22, ax33]:
-	pass
-
-# ax1t = ax1.twiny()
-# ax1t.plot(pa, np.transpose(np.transpose(np.outer(np.ones(3), rtd_arr[2, 0:4])) * ja / ja[2]), '--')
-# ax1t.set_xlabel('Perv (e-6)')
-# ax2t = ax2.twiny()
-# ax2t.plot(pa, np.transpose(np.transpose(np.outer(np.ones(3), rtd_arr[2, 4:8])) * ja / ja[2]), '--')
-# ax2t.set_xlabel('Perv (e-6)')
-# ax3t = ax3.twiny()
-# ax3t.plot(pa, np.transpose(np.transpose(np.outer(np.ones(3), rtd_arr[2, 8:19])) * ja / ja[2]), '--')
-# ax3t.set_xlabel('Perv (e-6)')
-
-ax1.legend(fontsize=10)
-ax2.legend(fontsize=10)
-ax3.legend(ncol=2, fontsize=10)
-ax11.legend(fontsize=10)
-ax22.legend(fontsize=10)
-ax33.legend(ncol=2, fontsize=10)
-plt.show()
+if __name__ == '__main__':
+	# do_rtd_analysis()
+	# plot_rtd_sigs(104849)
+	perv_scan_14Jan22 = 104800 + np.array([18, 22, 26, 30, 31, 32, 33, 37, 38, 39, 42, 44, 49, 50, 53, 54, 56, 57, 58,
+	                                       59, 61, 62, 63, 64, 65])
+	perveance_scan_rtd_analysis(perv_scan_14Jan22)
+	plt.show()
