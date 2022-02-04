@@ -1,3 +1,4 @@
+import matplotlib.gridspec as gridspec
 from neutral_beam.rtd_analysis import avg_perv
 import matplotlib.pyplot as plt
 import numpy as np
@@ -151,26 +152,29 @@ def cal_dtemp(shot, dbug=False, more=False):
 			return meas, pred, [dt0, dt1, dt2, dt3, dt4], [ipfit[0], stdev]
 
 
-def cal_temp_sigs(shot):
+def cal_temp_sigs(shot, calonly=False):
 	nodata = np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
-	if shot > 200000:
-		treename = 'ltx_nbi'
-		prefix = ''
-		nbi_only = True
-	else:
-		treename = 'ltx_b'
-		prefix = '.oper_diags.ltx_nbi'
+	if calonly:
 		nbi_only = False
-	try:
-		tree = get_tree_conn(shot, treename=treename)
-		(ti, ib) = get_data(tree, f'{prefix}.source_diags.i_hvps')
-		(tv, vb) = get_data(tree, f'{prefix}.source_diags.v_hvps')
-		ts = get_data(tree, '.metadata.timestamp')
-	except mds.mdsExceptions.TreeNODATA:
-		print(f'trouble fetching MDSPlus data for shot {shot}')
-		return nodata
-	if len(ts.split('/')[0]) < 2:
-		ts = f'0{ts}'
+	else:
+		if shot > 200000:
+			treename = 'ltx_nbi'
+			prefix = ''
+			nbi_only = True
+		else:
+			treename = 'ltx_b'
+			prefix = '.oper_diags.ltx_nbi'
+			nbi_only = False
+		try:
+			tree = get_tree_conn(shot, treename=treename)
+			(ti, ib) = get_data(tree, f'{prefix}.source_diags.i_hvps')
+			(tv, vb) = get_data(tree, f'{prefix}.source_diags.v_hvps')
+			ts = get_data(tree, '.metadata.timestamp')
+		except mds.mdsExceptions.TreeNODATA:
+			print(f'trouble fetching MDSPlus data for shot {shot}')
+			return nodata
+		if len(ts.split('/')[0]) < 2:
+			ts = f'0{ts}'
 	direc = 'Y:/thermocouple/Calorimeter/'
 	if nbi_only:
 		dt = datetime.datetime.strptime(ts, '%m/%d/%Y %I:%M:%S %p')
@@ -190,15 +194,6 @@ def cal_temp_sigs(shot):
 		return nodata
 	else:
 		print(f'shot {shot} synced with {sync_file[0]}')
-		ib = np.interp(tv, ti, ib)  # get ib onto vb axis
-		t_beamon = np.where(vb > 5000)  # only look at where beam is above 5kV
-		pad = 0.25e-3  # remove this amt from beginning/end of beam
-		t_window = np.where((tv >= tv[t_beamon[0][0]] + pad) & (tv <= tv[t_beamon[0][-1]] - pad))
-		ipfit = np.polyfit(tv[t_window], ib[t_window], 1)
-		stdev = np.sqrt(np.sum((ib[t_window] - (tv[t_window] * ipfit[0] + ipfit[1])) ** 2 / len(tv[t_window])))
-		pb = ib * vb  # beam power [W]
-		tot_joules = np.sum([pb[i] * (tv[i] - tv[i - 1]) for i in np.arange(1, len(tv))])
-		
 		lvm_file = sync_file[0]
 		lvm = lvm_read.read(f'{direc}{lvm_file}', dump_file=False, read_from_pickle=False)
 		lvm0 = lvm[0]
@@ -209,9 +204,10 @@ def cal_temp_sigs(shot):
 		c3, c4 = lvm0['data'][:, 7], lvm0['data'][:, 8]
 		it = np.where(time < 300)
 		time, c0, c1, c2, c3, c4 = time[it], c0[it], c1[it], c2[it], c3[it], c4[it]
-		ipeak = np.where(c0 == max(c0))[0][0]
-		b0, b1, b2, b3, b4 = mean(c0[:ipeak - 1]), mean(c1[:ipeak - 1]), mean(c2[:ipeak - 1]), mean(
-			c3[:ipeak - 1]), mean(c4[:ipeak - 1])
+		ipeak = min([np.where(c0 == max(c0))[0][0], np.where(c1 == max(c1))[0][0], np.where(c2 == max(c2))[0][0],
+		             np.where(c3 == max(c3))[0][0], np.where(c4 == max(c4))[0][0]])
+		b0, b1, b2, b3, b4 = mean(c0[:ipeak - 5]), mean(c1[:ipeak - 5]), mean(c2[:ipeak - 5]), mean(
+			c3[:ipeak - 5]), mean(c4[:ipeak - 5])
 		c0, c1, c2, c3, c4 = c0 - b0, c1 - b1, c2 - b2, c3 - b3, c4 - b4
 		time -= time[ipeak]
 		return time, c0, c1, c2, c3, c4
@@ -715,54 +711,44 @@ def calorimeter_21Jan():
 plt.show()
 
 
-def compare_thermocouple_signals(beforenafter=True):
-	import matplotlib.gridspec as gridspec
-	clrs = plt.rcParams['axes.prop_cycle'].by_key()['color']
-	
-	# new orifice, original alignment
-	shots21jan22 = 104800 + np.array([66, 68, 69, 70, 71, 72, 74, 75, 76, 77, 78, 80, 85, 86, 87, 89, 92, 93])
-	# new orifice, new alignment
+def get_thermocouple_numbers(shots, tp):
+	c0p, c1p, c2p, c3p, c4p = np.zeros_like(tp), np.zeros_like(tp), np.zeros_like(tp), np.zeros_like(
+		tp), np.zeros_like(tp)
+	num = 0.
+	for shot in shots:
+		if 12.5 < avg_perv(shot) * 1.e6 < 18:
+			num += 1
+			t, c0, c1, c2, c3, c4 = cal_temp_sigs(shot)
+			c0p += np.interp(tp, t, c0)
+			c1p += np.interp(tp, t, c1)
+			c2p += np.interp(tp, t, c2)
+			c3p += np.interp(tp, t, c3)
+			c4p += np.interp(tp, t, c4)
+	c0p, c1p, c2p, c3p, c4p = c0p / num, c1p / num, c2p / num, c3p / num, c4p / num
+	ipeak = np.where(c0p == max(c0p))[0][0]
+	# dt0, dt1, dt2, dt3, dt4 = max(c0p), max(c1p), max(c2p), max(c3p), max(c4p)
+	dt0, dt1, dt2, dt3, dt4 = c0p[ipeak], c1p[ipeak], c2p[ipeak], c3p[ipeak], c4p[ipeak]
+	return c0p, c1p, c2p, c3p, c4p, [dt0, dt1, dt2, dt3, dt4]
+
+
+def compare_neutralizer_onoff():
+	tp = np.linspace(-50, 100, endpoint=True)
+	# new orifice, realignment 1, shift to right (aim left)
 	shots25jan22 = 104900 + np.array([26, 27, 28, 29, 30, 32, 33, 34, 35, 36, 37, 43, 44, 45, 46])
 	# new orifice, new alignment, no neutralizer
 	shots25jan22_noneut = 104900 + np.array([38, 41, 48, 49, 50, 51])
-	tp = np.linspace(-50, 100, endpoint=True)
-	
-	def get_numbers(shots):
-		c0p, c1p, c2p, c3p, c4p = np.zeros_like(tp), np.zeros_like(tp), np.zeros_like(tp), np.zeros_like(
-			tp), np.zeros_like(tp)
-		num = 0.
-		for shot in shots:
-			if 12.5 < avg_perv(shot) * 1.e6 < 18:
-				num += 1
-				t, c0, c1, c2, c3, c4 = cal_temp_sigs(shot)
-				c0p += np.interp(tp, t, c0)
-				c1p += np.interp(tp, t, c1)
-				c2p += np.interp(tp, t, c2)
-				c3p += np.interp(tp, t, c3)
-				c4p += np.interp(tp, t, c4)
-		c0p, c1p, c2p, c3p, c4p = c0p / num, c1p / num, c2p / num, c3p / num, c4p / num
-		ipeak = np.where(c0p == max(c0p))[0][0]
-		# dt0, dt1, dt2, dt3, dt4 = max(c0p), max(c1p), max(c2p), max(c3p), max(c4p)
-		dt0, dt1, dt2, dt3, dt4 = c0p[ipeak], c1p[ipeak], c2p[ipeak], c3p[ipeak], c4p[ipeak]
-		return c0p, c1p, c2p, c3p, c4p, [dt0, dt1, dt2, dt3, dt4]
-	
-	if beforenafter:
-		pre0, pre1, pre2, pre3, pre4, dt_pre = get_numbers(shots21jan22)
-		post0, post1, post2, post3, post4, dt_post = get_numbers(shots25jan22)
-	else: # neut vs no neutralizer
-		pre0, pre1, pre2, pre3, pre4, dt_pre = get_numbers(shots25jan22)
-		post0, post1, post2, post3, post4, dt_post = get_numbers(shots25jan22_noneut)
-
+	pre0, pre1, pre2, pre3, pre4, dt_pre = get_thermocouple_numbers(shots25jan22, tp)
+	post0, post1, post2, post3, post4, dt_post = get_thermocouple_numbers(shots25jan22_noneut, tp)
 	fig = plt.figure(tight_layout=True, figsize=(10, 8))
 	gs = gridspec.GridSpec(2, 2)
 	ax1 = fig.add_subplot(gs[0, 0])
 	ax2 = fig.add_subplot(gs[0, 1])
 	ax3 = fig.add_subplot(gs[1, :])
-	ax1.plot(tp, pre0, clrs[0], label='center')
-	ax1.plot(tp, pre1, clrs[1], label='right (down)')
-	ax1.plot(tp, pre2, clrs[2], label='up (right)')
-	ax1.plot(tp, pre3, clrs[3], label='left (up)')
-	ax1.plot(tp, pre4, clrs[4], label='down (left)')
+	ax1.plot(tp, pre0, clrs[0], label='center')  # correct labeling
+	ax1.plot(tp, pre1, clrs[1], label='down')
+	ax1.plot(tp, pre2, clrs[2], label='right')
+	ax1.plot(tp, pre3, clrs[3], label='up')
+	ax1.plot(tp, pre4, clrs[4], label='left')
 	ax2.plot(tp, post0, clrs[0])
 	ax2.plot(tp, post1, clrs[1])
 	ax2.plot(tp, post2, clrs[2])
@@ -780,44 +766,173 @@ def compare_thermocouple_signals(beforenafter=True):
 	ax3.set_ylabel('thermocouple\n$\Delta T$ (deg C)')
 	ax3.set_xlim((-2, 2))
 	ax3.set_xticks([-1, 1])
-
-	if beforenafter:
-		ax1.set_title('Before')
-		ax2.set_title('After')
-		ax3.set_xlabel('beam realignment')
-		ax3.set_xticklabels(['before', 'after'])
-	else:
-		ax1.set_title('Neutralizer ON')
-		ax2.set_title('Neutralizer OFF')
-		ax3.set_xticklabels(['neut ON', 'neut OFF'])
-
+	
+	ax1.set_title('Neutralizer ON')
+	ax2.set_title('Neutralizer OFF')
+	ax3.set_xticklabels(['neut ON', 'neut OFF'])
+	
 	plt.show()
 
 
-# a = 1
-#
-# offs = [0, 10, 0]
-# # [old orifices & aiming, new orifices & old aiming, new orifices & aiming]
-# for i, shot in enumerate([506587, 104866, 104936]):
-# 	t, c0, c1, c2, c3, c4 = cal_temp_sigs(shot)
-# 	plt.plot(t + offs[i], c0, clrs[0])
-# 	plt.plot(t + offs[i], c1, clrs[1])
-# 	plt.plot(t + offs[i], c2, clrs[2])
-# 	plt.plot(t + offs[i], c3, clrs[3])
-# 	plt.plot(t + offs[i], c4, clrs[4])
-# plt.xlim((-5, 50))
-# plt.xlabel('time')
-# plt.ylabel('temp increase')
-# plt.show()
+def beam_realignment():
+	clrs = plt.rcParams['axes.prop_cycle'].by_key()['color']
+	
+	# new orifice, original alignment
+	shots21jan22 = 104800 + np.array([66, 68, 69, 70, 71, 72, 74, 75, 76, 77, 78, 80, 85, 86, 87, 89, 92, 93])
+	# new orifice, realignment 1, shift to right (aim left)
+	shots25jan22 = 104900 + np.array([26, 27, 28, 29, 30, 32, 33, 34, 35, 36, 37, 43, 44, 45, 46])
+	# new orifice, realignment 2, shift part way back left (aim right)
+	shots1feb22 = 105000 + np.array([9, 11, 12, 13, 14, 15])
+	# realignment 3: centered calorimeter based on measurements made on spare
+	shots3feb22 = 105000 + np.array([22, 23, 24, 25, 27])
+	tp = np.linspace(-50, 100, endpoint=True)
+	
+	a0, a1, a2, a3, a4, adt = get_thermocouple_numbers(shots21jan22, tp)
+	b0, b1, b2, b3, b4, bdt = get_thermocouple_numbers(shots25jan22, tp)
+	c0, c1, c2, c3, c4, cdt = get_thermocouple_numbers(shots1feb22, tp)
+	d0, d1, d2, d3, d4, ddt = get_thermocouple_numbers(shots3feb22, tp)
+	
+	fig = plt.figure(tight_layout=True, figsize=(10, 8))
+	gs = gridspec.GridSpec(2, 4)
+	ax1 = fig.add_subplot(gs[0, 0])
+	ax2 = fig.add_subplot(gs[0, 1])
+	ax3 = fig.add_subplot(gs[0, 2])
+	ax4 = fig.add_subplot(gs[0, 3])
+	bax = fig.add_subplot(gs[1, :])
+	lbls = ['center', 'down', 'right', 'up', 'left']  # correct labeling
+	for i, a in enumerate([a0, a1, a2, a3, a4]):
+		ax1.plot(tp, a, clrs[i], label=lbls[i])
+	for i, b in enumerate([b0, b1, b2, b3, b4]):
+		ax2.plot(tp, b, clrs[i])
+	for i, c in enumerate([c0, c1, c2, c3, c4]):
+		ax3.plot(tp, c, clrs[i])
+	for i, d in enumerate([d0, d1, d2, d3, d4]):
+		ax4.plot(tp, d, clrs[i])
+	ax1.legend()
+	
+	xt = [0, 1, 2, 3]
+	for i in range(5):
+		bax.plot(xt, [adt[i], bdt[i], cdt[i], ddt[i]], 's-', c=clrs[i])
+	
+	ax1.set_ylabel('thermocouple\ntemp (deg C)')
+	ax1.set_xlabel('time rel to beam')
+	for ax in [ax2, ax3, ax4]:
+		ax.set_ylim(ax1.get_ylim())
+	# ax2.set_xlabel('time rel to beam')
+	bax.set_ylabel('thermocouple\n$\Delta T$ (deg C)')
+	bax.set_xlim((min(xt) - .5, max(xt) + .5))
+	bax.set_xticks(xt)
+	
+	# COMPUTE rough adjustment guess based on thermocouple ratios
+	fig2, axx = plt.subplots()
+	xx = [0, .1, .3]  # c, a, b
+	yy = [abs(cdt[4] - cdt[2]), abs(adt[4] - adt[2]), abs(bdt[4] - bdt[2])]  # left/right asymmetry across 2 adjustments
+	yy2 = abs(ddt[3] - ddt[1])  # up/down asymmetry
+	fit = np.polyfit(xx, yy, 1)
+	axx.plot(xx, yy, 'o-')
+	axx.plot((yy2 - fit[1]) / fit[0], yy2, 'rs')
+	print(f'Suggested move {yy2}"')
+	# lr_pre, lr_post = dt_pre[4] - dt_pre[2], dt_post[4] - dt_post[2]
+	# crossing_fraction = abs(lr_pre) / (abs(lr_pre) + abs(lr_post))  # fraction between pre/post where L/R cross
+	# print(f'L/R cross at {crossing_fraction * 100:.2f}% between Before and After')
+	
+	ax1.set_title('Original')
+	ax2.set_title('Source adjusted 0.4" right')
+	ax3.set_title('Source 0.3" left')
+	ax4.set_title('Calorimeter lowered ~0.4"')
+	bax.set_xlabel('beam realignment')
+	bax.set_xticklabels(['original', 'adj1', 'adj2', 'adj3'])
+	
+	plt.show()
+
+
+def calorimeter_positional_variation():
+	import matplotlib.gridspec as gridspec
+	clrs = plt.rcParams['axes.prop_cycle'].by_key()['color']
+	
+	tp = np.linspace(-50, 100, endpoint=True)
+	
+	def get_numbers(shots):
+		therms = np.zeros((len(tp), 5))
+		num = 0.
+		for shot in shots:
+			num += 1
+			t, c0, c1, c2, c3, c4 = cal_temp_sigs(shot, calonly=True)
+			therms[:, 0] += np.interp(tp, t, c0)
+			therms[:, 1] += np.interp(tp, t, c1)
+			therms[:, 2] += np.interp(tp, t, c2)
+			therms[:, 3] += np.interp(tp, t, c3)
+			therms[:, 4] += np.interp(tp, t, c4)
+		therms /= num
+		ipeak = np.where(therms[:, 0] == max(therms[:, 0]))[0][0]
+		dt = np.zeros(5)
+		for i in range(5):
+			dt[i] = therms[ipeak, i]
+		return therms, dt
+	
+	shots1 = 104900 + np.array([75, 76, 77, 78, 80])  # nominal- calorimeter centered on beamline
+	shots2 = 104900 + np.array([81, 82, 83, 84, 85])  # position +0.25"
+	shots3 = 104900 + np.array([86, 88, 89, 90, 92])  # position at +0.5"
+	shots4 = 104900 + np.array([96, 97, 98, 99, 101])
+	shots5 = 105000 + np.array([2, 3, 4, 5, 6])
+	p1, dt1 = get_numbers(shots1)
+	p2, dt2 = get_numbers(shots2)
+	p3, dt3 = get_numbers(shots3)
+	p4, dt4 = get_numbers(shots4)
+	p5, dt5 = get_numbers(shots5)
+	fig = plt.figure(tight_layout=True)  # , figsize=(10, 8))
+	gs = gridspec.GridSpec(2, 5)
+	ax1 = fig.add_subplot(gs[0, 0])
+	ax2 = fig.add_subplot(gs[0, 1])
+	ax3 = fig.add_subplot(gs[0, 2])
+	ax4 = fig.add_subplot(gs[0, 3])
+	ax5 = fig.add_subplot(gs[0, 4])
+	axb = fig.add_subplot(gs[1, :])
+	lbls = ['center', 'down', 'right', 'up', 'left']
+	for ip in range(5):
+		ax1.plot(tp, p1[:, ip], clrs[ip])
+		ax2.plot(tp, p2[:, ip], clrs[ip])
+		ax3.plot(tp, p3[:, ip], clrs[ip])
+		ax4.plot(tp, p4[:, ip], clrs[ip])
+		ax5.plot(tp, p5[:, ip], clrs[ip], label=f'{ip}: {lbls[ip]}')
+	ax5.legend()
+	
+	pos = [0, .25, .5, .75, 1.0]
+	axb.set_xticks(pos)
+	axb.set_xticklabels([str(p) for p in pos])
+	for i in range(5):
+		axb.plot(pos, [dt1[i], dt2[i], dt3[i], dt4[i], dt5[i]], 's-', c=clrs[i])
+	
+	ax1.set_ylabel('thermocouple\ntemp (deg C)')
+	ax3.set_xlabel('time rel to beam')
+	for ax in [ax1, ax2, ax4, ax5]:
+		ax.set_ylim(ax3.get_ylim())
+	axb.set_ylabel('thermocouple\n$\Delta T$ (deg C)')
+	
+	for ia, ax in enumerate([ax1, ax2, ax3, ax4, ax5]):
+		ax.set_title(f'{pos[ia]}')
+	axb.set_xlabel('calorimeter position')
+	
+	plt.show()
+
+
+def realigned_beam_neutralization_check():
+	shots16kev = 105000 + np.array([])
+	shots20kev = 105000 + np.array([])
+	dt_meas_16kev, dt_pred_16kev = [],[]
+	
+	for ish, shot in enumerate(shots16kev):
+		dtm, dtp = cal_dtemp(shot, dbug=True)
+		dt_meas_16kev.append(dtm)
+		dt_pred_16kev.append(dtp)
+	
+	fig, (ax1, ax2, ax3) = plt.subplots(ncols=3)
+	ax1.plot()
 
 
 if __name__ == '__main__':
-	compare_thermocouple_signals(beforenafter=True)
+	# todo: beam halfwidth vs perveance scan
+	# calorimeter_positional_variation()
+	beam_realignment()
 	# calorimeter_21Jan()  # coincides w/settings used for 14Jan Perveance scan
 	plt.show()
-# big_scan = 0
-# pulse_timing = 0
-# anode_cathode_puffing = 0
-# new_valve_data = 0
-# new_valve_neutralizer = 0
-# new_valve_cathode = 0

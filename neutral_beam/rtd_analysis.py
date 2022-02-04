@@ -206,6 +206,42 @@ def avg_perv(shot, Ej=False):
 		return av_perv
 
 
+def get_rtd_quick_response(shots):
+	tp = np.linspace(-20, 100, num=1000, endpoint=True)
+	num = 0
+	up = np.zeros((len(tp), 4))
+	dn = np.zeros((len(tp), 4))
+	for ish, shot in enumerate(shots):
+		_, tot_j = avg_perv(shot, Ej=True)
+		lvm_file = f'{dir}{shot}.lvm'
+		if os.path.exists(lvm_file):
+			print(shot)
+			lvm = lvm_read.read(lvm_file, dump_file=False, read_from_pickle=False)
+			lvm0 = lvm[0]
+			rtd_nam = lvm0['Channel names'][1:20]  # u1-4,l1-4,d1-11
+			# sigs 2,3,4 on uppers seem good to use to locate tbeam0
+			ibeam = np.where(np.diff(lvm0['data'][:, 2]) == max(np.diff(lvm0['data'][:, 2])))[0][0]
+			t = lvm0['data'][:, 0] - lvm0['data'][:, 0][ibeam]
+			for iscrp in [0, 1, 2, 3]:
+				up[:, iscrp] += np.interp(tp, t, lvm0['data'][:, iscrp + 1] - mean(
+					lvm0['data'][:ibeam - 5, iscrp + 1])) / tot_j
+				dn[:, iscrp] += np.interp(tp, t, lvm0['data'][:, iscrp + 5] - mean(
+					lvm0['data'][:ibeam - 5, iscrp + 5])) / tot_j
+			num += 1
+	up /= num
+	dn /= num
+	
+	# sigs 2,3,4 on uppers seem good to use to locate tbeam0
+	ibeam = np.where(np.diff(up[:, 1]) == max(np.diff(up[:, 1])))[0][0]  # use scraper number 2
+	quick = 10  # num of seconds to wait for temp response
+	iquick = int(quick / (tp[1] - tp[0]))  # num of data points in quick
+	dt = np.zeros(8)
+	for i in range(4):
+		dt[i] = max(up[ibeam:ibeam + iquick, i])
+		dt[i + 4] = max(dn[ibeam:ibeam + iquick, i])
+	return tp, up, dn, None, dt
+
+
 def perveance_scan_rtd_analysis(shots):
 	# plot temp rise on beam dump/scrapers vs avg perveance
 	rtd_arr = np.zeros((19, len(shots)))
@@ -240,6 +276,62 @@ def perveance_scan_rtd_analysis(shots):
 	ax3.set_title('Far Side Dump')
 	ax2.set_xlabel('Perveance ($x10^{-6}$)')
 	ax1.set_ylabel('$\Delta T/E_{tot}$ ($\degree$C/kJ)')
+	
+	fig2, ax4 = plt.subplots()
+	ax4.plot(av_pervs[isort] * 1.e6, rtd_arr[0, :][isort] / rtd_arr[4, :][isort], 'o-', label='1')
+	ax4.plot(av_pervs[isort] * 1.e6, rtd_arr[1, :][isort] / rtd_arr[5, :][isort], 'o-', label='2')
+	ax4.plot(av_pervs[isort] * 1.e6, rtd_arr[2, :][isort] / rtd_arr[6, :][isort], 'o-', label='3')
+	ax4.plot(av_pervs[isort] * 1.e6, rtd_arr[3, :][isort] / rtd_arr[7, :][isort], 'o-', label='4')
+	ax4.set_xlabel('Perveance ($x10^{-6}$)')
+	ax4.set_ylabel('Upper/Lower ratio')
+	ax4.set_ylim(bottom=0)
+	ax4.legend(title='RTD #')
+
+
+def compare_rtd_signals():
+	import matplotlib.gridspec as gridspec
+	clrs = plt.rcParams['axes.prop_cycle'].by_key()['color']
+	
+	ir_24jan22 = 104900 + np.array([6, 8, 9, 11, 13, 17, 18, 20, 23])
+	ir_26jan22 = np.arange(15) + 104960
+	
+	tp, preup, predn, predmp, dt_pre = get_rtd_quick_response(ir_24jan22)
+	tp, postup, postdn, postdmp, dt_post = get_rtd_quick_response(ir_26jan22)
+	
+	fig = plt.figure(tight_layout=True, figsize=(10, 10))
+	gs = gridspec.GridSpec(3, 2)
+	ax1 = fig.add_subplot(gs[0, 0])
+	ax2 = fig.add_subplot(gs[0, 1])
+	ax3 = fig.add_subplot(gs[1, 0])
+	ax4 = fig.add_subplot(gs[1, 1])
+	ax5 = fig.add_subplot(gs[2, :])
+	for i in [0, 1, 2, 3]:
+		ax1.plot(tp, preup[:, i] * 1.e3, clrs[i], label=str(i))
+		ax2.plot(tp, postup[:, i] * 1.e3, clrs[i])
+		ax3.plot(tp, predn[:, i] * 1.e3, clrs[i+4], label=str(i))
+		ax4.plot(tp, postdn[:, i] * 1.e3, clrs[i+4])
+	ax1.legend(title='scraper #')
+	ax3.legend(title='scraper #')
+	
+	ax5.plot([4, 3, 2, 1], dt_post[:4] * 1.e3 - dt_pre[:4] * 1.e3, 's-', label='upper')
+	ax5.plot([4, 3, 2, 1], dt_post[4:] * 1.e3 - dt_pre[4:] * 1.e3, 's-', label='lower')
+	ax5.legend()
+	
+	ax1.set_title('Before')
+	ax2.set_title('After')
+	ax1.set_ylabel('UPPER (deg C per kJ)')
+	ax1.set_xlabel('time rel to beam')
+	ax1.set_ylim(ax2.get_ylim())
+	ax2.set_xlabel('time rel to beam')
+	ax3.set_ylabel('LOWER (deg C per kJ)')
+	ax3.set_xlabel('time rel to beam')
+	ax4.set_ylim(ax3.get_ylim())
+	ax4.set_xlabel('time rel to beam')
+	ax5.set_ylabel('Change in dT due to realignment\n(deg C per kJ)')
+	ax5.set_xticks([1, 2, 3, 4])
+	ax5.set_xticklabels(['4', '3', '2', '1'])
+	ax5.set_xlabel('Scraper RTD number')
+	plt.show()
 
 
 if __name__ == '__main__':
@@ -247,5 +339,12 @@ if __name__ == '__main__':
 	# plot_rtd_sigs(104849)
 	perv_scan_14Jan22 = 104800 + np.array([18, 22, 26, 30, 31, 32, 33, 37, 38, 39, 42, 44, 49, 50, 53, 54, 56, 57, 58,
 	                                       59, 61, 62, 63, 64, 65])
-	perveance_scan_rtd_analysis(perv_scan_14Jan22)
+	# perveance_scan_rtd_analysis(perv_scan_14Jan22)
+	
+	ir_24jan22 = 104900 + np.array([6, 8, 9, 11, 13, 17, 18, 20, 23])
+	# perveance_scan_rtd_analysis(ir_24jan22)
+	ir_26jan22 = np.arange(15) + 104960
+	# perveance_scan_rtd_analysis(ir_26jan22)
+	
+	compare_rtd_signals()
 	plt.show()
