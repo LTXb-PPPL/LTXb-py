@@ -123,9 +123,9 @@ def plot_collision_freqs(axs=None, ls='-', showlegend=True):
 
 if __name__ == '__main__':
 	
-	demo = 0
-	frac_demo = 1
-	show1036170301 = 1
+	demo = 1
+	frac_demo = 0
+	show1036170301 = 0
 	if demo:
 		te = 100  # plasma electron temp [eV]
 		ti = 100  # plasma ion temp [eV]

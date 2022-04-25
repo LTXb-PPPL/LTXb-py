@@ -1,11 +1,11 @@
 import matplotlib.gridspec as gridspec
-from neutral_beam.rtd_analysis import avg_perv
 import matplotlib.pyplot as plt
 import numpy as np
-from helpful_stuff import SimpleSignal
+from helpful_stuff import avg_perv, calculate_perv_pwr, get_shot_timestamp
 import lvm_read
 from bills_LTX_MDSplus_toolbox import *
 import os
+from scipy.optimize import minimize
 
 plot_shot_signals = 0
 if plot_shot_signals:
@@ -24,35 +24,6 @@ if plot_shot_signals:
 	ax.set_ylabel('$V_{nbi}$ (kV)', c=clrs[0], fontsize=fs)
 	axr.set_ylabel('$I_{nbi}$ (A)', c=clrs[1], fontsize=fs)
 	plt.show()
-
-
-def calculate_perv_pwr(shot):
-	if shot > 200000:
-		treename = 'ltx_nbi'
-		prefix = ''
-		nbi_only = True
-	else:
-		treename = 'ltx_b'
-		prefix = '.oper_diags.ltx_nbi'
-		nbi_only = False
-	try:
-		tree = get_tree_conn(shot, treename=treename)
-		(ti, ib) = get_data(tree, f'{prefix}.source_diags.i_hvps')
-		(tv, vb) = get_data(tree, f'{prefix}.source_diags.v_hvps')
-		ib = np.interp(tv, ti, ib)  # get ib onto vb axis
-		t_beamon = np.where(vb > 5000)  # only look at where beam is above 5kV
-		pad = 0.25e-3  # remove this amt from beginning/end of beam
-		t_window = np.where((tv >= tv[t_beamon[0][0]] + pad) & (tv <= tv[t_beamon[0][-1]] - pad))
-		perv, pwr = ones_like(vb), ones_like(vb)
-		perv[:], pwr[:] = np.nan, np.nan
-		perv[t_window] = ib[t_window] / vb[t_window] ** 1.5
-		pwr[t_window] = ib[t_window] * vb[t_window]  # [W]
-		av_perv, av_pwr = np.nanmean(perv), np.nanmean(pwr)
-		dperv, dpwr = (np.nanmax(perv) - np.nanmin(perv)) / 2., (np.nanmax(pwr) - np.nanmin(pwr)) / 2.
-		return av_perv, dperv, av_pwr, dpwr
-	except mds.mdsExceptions.TreeNODATA:
-		print(f'trouble fetching MDSPlus data for shot {shot}')
-		return np.nan, np.nan, np.nan, np.nan
 
 
 def cal_dtemp(shot, dbug=False, more=False):
@@ -108,23 +79,19 @@ def cal_dtemp(shot, dbug=False, more=False):
 		
 		lvm_file = sync_file[0]
 		lvm = lvm_read.read(f'{direc}{lvm_file}', dump_file=False, read_from_pickle=False)
-		lvm0 = lvm[0]
-		time = lvm0['data'][:, 0]
-		rtd_nam = lvm0['Channel names'][4:9]  # tc14-18
-		
-		c0, c1, c2 = lvm0['data'][:, 4], lvm0['data'][:, 5], lvm0['data'][:, 6]
-		c3, c4 = lvm0['data'][:, 7], lvm0['data'][:, 8]
+		time, rtd_nam, c0, c1, c2, c3, c4 = get_cal_sigs(lvm[0])
 		it = np.where(time < 300)
 		time, c0, c1, c2, c3, c4 = time[it], c0[it], c1[it], c2[it], c3[it], c4[it]
 		ipeak = np.where(c0 == max(c0))[0][0]
 		baseline = mean((c0[:ipeak - 1] + c1[:ipeak - 1] + c2[:ipeak - 1] + c3[:ipeak - 1] + c4[:ipeak - 1]) / 5.)
 		islow_decay = np.where((time > time[ipeak] + 25) & (time < time[ipeak] + 100))[0]
-		if len(islow_decay) < 100:
+		if len(islow_decay) < 50:
 			print(f'--insufficient data to analyze for shot {shot} in file {lvm_file}')
 			return nodata
 		else:
-			dt0, dt1, dt2, dt3, dt4 = c0[ipeak] - mean(c0[0:ipeak - 5]), c1[ipeak] - mean(c1[0:ipeak - 5]), c2[
-				ipeak] - mean(c2[0:ipeak - 5]), c3[ipeak] - mean(c3[0:ipeak - 5]), c4[ipeak] - mean(c4[0:ipeak - 5])
+			dt0, dt1, dt2, dt3, dt4 = c0[ipeak] - mean(c0[0:ipeak - 5]), c1[ipeak + 5] - mean(c1[0:ipeak - 5]), c2[
+				ipeak + 5] - mean(c2[0:ipeak - 5]), c3[ipeak + 5] - mean(c3[0:ipeak - 5]), c4[ipeak + 5] - mean(
+				c4[0:ipeak - 5])
 			line2fit = (c0[islow_decay] + c1[islow_decay] + c2[islow_decay] + c3[islow_decay] + c4[islow_decay]) / 5.
 			time2fit = time[islow_decay]
 			fit = np.polyfit(time2fit, line2fit, 1)
@@ -134,13 +101,10 @@ def cal_dtemp(shot, dbug=False, more=False):
 			
 			if dbug:
 				plt.suptitle(f'{shot}')
-				plt.plot(time, c0, label='tc0')
+				for i, c in enumerate([c0, c1, c2, c3, c4]):
+					plt.plot(time, c, label=rtd_nam[i])
 				# plt.axvline(time[islow_decay[0]])
 				# plt.axvline(time[islow_decay[-1]])
-				plt.plot(time, c1, label='tc1')
-				plt.plot(time, c2, label='tc2')
-				plt.plot(time, c3, label='tc3')
-				plt.plot(time, c4, label='tc4')
 				plt.legend()
 				plt.xlim((0, 60))
 				# plt.axhline(baseline)
@@ -148,8 +112,23 @@ def cal_dtemp(shot, dbug=False, more=False):
 				plt.xlabel('time (s)')
 				plt.ylabel('temp ($\degree$C)')
 				plt.show()
-			
-			return meas, pred, [dt0, dt1, dt2, dt3, dt4], [ipfit[0], stdev]
+			if more:
+				return meas, pred, [dt0, dt1, dt2, dt3, dt4], [ipfit[0], stdev]
+			else:
+				return meas, pred
+
+
+def get_cal_sigs(lvm):
+	time = lvm['data'][:, 0]
+	if 'Temperature_0' in lvm['Channel names']:  # data taken using fast calorimeter-only LabVIEW
+		rtd_nam = lvm['Channel names'][4:9]  # tc14-18
+		c0, c1, c2 = lvm['data'][:, 4], lvm['data'][:, 5], lvm['data'][:, 6]
+		c3, c4 = lvm['data'][:, 7], lvm['data'][:, 8]
+	else:  # data taken with regular LabVIEW, records all RTDs along with calorimeter thermocouples
+		rtd_nam = lvm['Channel names'][15:20]  # tc14-18
+		c0, c1, c2 = lvm['data'][:, 15], lvm['data'][:, 16], lvm['data'][:, 17]
+		c3, c4 = lvm['data'][:, 18], lvm['data'][:, 19]
+	return time, rtd_nam, c0, c1, c2, c3, c4
 
 
 def cal_temp_sigs(shot, calonly=False):
@@ -196,12 +175,7 @@ def cal_temp_sigs(shot, calonly=False):
 		print(f'shot {shot} synced with {sync_file[0]}')
 		lvm_file = sync_file[0]
 		lvm = lvm_read.read(f'{direc}{lvm_file}', dump_file=False, read_from_pickle=False)
-		lvm0 = lvm[0]
-		time = lvm0['data'][:, 0]
-		rtd_nam = lvm0['Channel names'][4:9]  # tc14-18
-		
-		c0, c1, c2 = lvm0['data'][:, 4], lvm0['data'][:, 5], lvm0['data'][:, 6]
-		c3, c4 = lvm0['data'][:, 7], lvm0['data'][:, 8]
+		time, rtd_nam, c0, c1, c2, c3, c4 = get_cal_sigs(lvm[0])
 		it = np.where(time < 300)
 		time, c0, c1, c2, c3, c4 = time[it], c0[it], c1[it], c2[it], c3[it], c4[it]
 		ipeak = min([np.where(c0 == max(c0))[0][0], np.where(c1 == max(c1))[0][0], np.where(c2 == max(c2))[0][0],
@@ -686,6 +660,7 @@ def calorimeter_21Jan():
 		ax2.plot(perv, dt3, mark, label=lbls[3], c=clrs[3])
 		ax2.plot(perv, dt4, mark, label=lbls[4], c=clrs[4])
 		ax3.plot(perv, dt0 / dt1, mark, c=clrs[0])
+		print(f'max power fraction on calorimeter {max(dt_meas / dt_pred) * 100}%')
 	
 	# NEW ORIFICES 01Dec21
 	fig, (ax1, ax2, ax3) = plt.subplots(ncols=3, figsize=(12, 5))
@@ -711,10 +686,12 @@ def calorimeter_21Jan():
 plt.show()
 
 
-def get_thermocouple_numbers(shots, tp):
+def get_thermocouple_numbers(shots, tp, ret_minmax=False):
 	c0p, c1p, c2p, c3p, c4p = np.zeros_like(tp), np.zeros_like(tp), np.zeros_like(tp), np.zeros_like(
 		tp), np.zeros_like(tp)
 	num = 0.
+	minmax = np.zeros((5, 2))
+	minmax[:] = np.nan
 	for shot in shots:
 		if 12.5 < avg_perv(shot) * 1.e6 < 18:
 			num += 1
@@ -724,14 +701,24 @@ def get_thermocouple_numbers(shots, tp):
 			c2p += np.interp(tp, t, c2)
 			c3p += np.interp(tp, t, c3)
 			c4p += np.interp(tp, t, c4)
+			ipeak = np.where(c0 == max(c0))[0][0]
+			for i in np.arange(5):
+				minmax[i, 0] = np.nanmin([minmax[i, 0], [c0, c1, c2, c3, c4][i][ipeak]])
+				minmax[i, 1] = np.nanmax([minmax[i, 1], [c0, c1, c2, c3, c4][i][ipeak]])
+		else:
+			print(f'bad perveance for shot {shot}')
 	c0p, c1p, c2p, c3p, c4p = c0p / num, c1p / num, c2p / num, c3p / num, c4p / num
 	ipeak = np.where(c0p == max(c0p))[0][0]
 	# dt0, dt1, dt2, dt3, dt4 = max(c0p), max(c1p), max(c2p), max(c3p), max(c4p)
 	dt0, dt1, dt2, dt3, dt4 = c0p[ipeak], c1p[ipeak], c2p[ipeak], c3p[ipeak], c4p[ipeak]
-	return c0p, c1p, c2p, c3p, c4p, [dt0, dt1, dt2, dt3, dt4]
+	if ret_minmax:
+		return c0p, c1p, c2p, c3p, c4p, [dt0, dt1, dt2, dt3, dt4], minmax
+	else:
+		return c0p, c1p, c2p, c3p, c4p, [dt0, dt1, dt2, dt3, dt4]
 
 
 def compare_neutralizer_onoff():
+	clrs = plt.rcParams['axes.prop_cycle'].by_key()['color']
 	tp = np.linspace(-50, 100, endpoint=True)
 	# new orifice, realignment 1, shift to right (aim left)
 	shots25jan22 = 104900 + np.array([26, 27, 28, 29, 30, 32, 33, 34, 35, 36, 37, 43, 44, 45, 46])
@@ -916,23 +903,480 @@ def calorimeter_positional_variation():
 	plt.show()
 
 
-def realigned_beam_neutralization_check():
-	shots16kev = 105000 + np.array([])
-	shots20kev = 105000 + np.array([])
-	dt_meas_16kev, dt_pred_16kev = [],[]
+def perveance_scan_7feb22(plot_vs='fwhm'):
+	"""
+	beam aligned on calorimeter, plot fwhm vs perveance
+	plot_vs: fwhm, power_frac_to_cal, or efold
+	"""
+	if plot_vs == 'fwhm' or plot_vs == 'efold':
+		units = ' (mm)'
+	else:
+		units = ''
+		
+	sh1 = 105100 + np.array(
+		[24, 27, 31, 32, 35, 45, 47, 48, 49, 50, 51, 52, 53, 54, 55, 57, 58, 59, 61, 62, 63, 64, 65, 67, 68, 69, 71, 73,
+		 74, 75, 76])
+	# sh1 = 105100 + np.array([45, 47, 50, 55, 58, 61, 62, 63, 67, 68, 73, 74, 75, 76])
+	fig, (ax1) = plt.subplots(ncols=1)  # 2, figsize=(10, 5))
+	fwhm_arr, perv_arr = np.array([]), np.array([])
+	insuff = []
+	for ish, shot in enumerate(sh1):
+		perv_arr = np.append(perv_arr, avg_perv(shot))
+		fwhm, suff_neut = cal_gauss_fit(shot, ret=plot_vs)
+		if not suff_neut:
+			insuff.append(ish)
+		fwhm_arr = np.append(fwhm_arr, fwhm)
 	
-	for ish, shot in enumerate(shots16kev):
-		dtm, dtp = cal_dtemp(shot, dbug=True)
-		dt_meas_16kev.append(dtm)
-		dt_pred_16kev.append(dtp)
+	ax1.plot(perv_arr * 1.e6, fwhm_arr, 'o')
+	ax1.plot(perv_arr[insuff] * 1.e6, fwhm_arr[insuff], 'kx')
+	ax1.set_xlabel('perveance (e-6)', fontsize=12)
+	ax1.set_ylabel(f'{plot_vs}{units}', fontsize=12)
+	ax1.tick_params(labelsize=12)
+	plt.tight_layout()
+
 	
-	fig, (ax1, ax2, ax3) = plt.subplots(ncols=3)
-	ax1.plot()
+def special_calibration(redo=False):
+	lvm_files = ['Y:/thermocouple/Calorimeter/04082022171755.lvm',
+	             'Y:/thermocouple/Calorimeter/04062022125726.lvm',
+	             'Y:/thermocouple/Calorimeter/04062022110632.lvm',
+	             'Y:/thermocouple/Calorimeter/04012022085324.lvm',
+	             'Y:/thermocouple/Calorimeter/03292022132144.lvm',
+	             'Y:/thermocouple/Calorimeter/03292022141515.lvm',
+	             'Y:/thermocouple/Calorimeter/04012022094257.lvm']
+	calibs = [-27, -20, -43, 97, 26, 26, 97]
+	if redo:
+		# NEED DIFFERENT CALIBRATIONS for each lvm file <sigh>
+		# direc = 'Y:/thermocouple/Calorimeter/'
+		# lvm_files = os.listdir(direc)
+		# lvm_files = [f'{direc}{lvmf}' for lvmf in lvm_files if '2022' in lvmf]  # lvms with date format
+		shots = np.arange(508397, 508398)
+		for ifile, lvmf in enumerate(lvm_files):
+			print(f'analyzing {lvmf}')
+			shotsinfile = []
+			shot_offsets = []
+			for shot in shots:
+				timestamp = get_shot_timestamp(shot)
+				# print(f'shot {shot} occurred at {timestamp}')
+				shot_ts = datetime.datetime.strptime(timestamp, '%m/%d/%Y %I:%M:%S %p')
+				lvm = lvm_read.read(lvmf, dump_file=False, read_from_pickle=False)
+				# lvm_strt = datetime.datetime.strptime(lvm['Date'] + ':' + lvm['Time'].split('.')[0], '%Y/%m/%d:%H:%M:%S')  # CLOCK IS OFF???
+				lvm_strt = datetime.datetime.strptime(lvmf.split('/')[-1].split('.')[0], '%m%d%Y%H%M%S')
+				lvm0 = lvm[0]
+				lvmtime, c0 = lvm0['data'][:, 0], lvm0['data'][:, 15]
+				lvm_end = lvm_strt + datetime.timedelta(seconds=lvmtime[-1])
+				if lvm_strt < shot_ts < lvm_end:
+					shot_offsets.append((shot_ts - lvm_strt).seconds)
+					shotsinfile.append(shot)
+			if len(shot_offsets) > 0:
+				plt.plot(lvmtime, c0)
+				for shoff in shot_offsets:
+					ii = np.where((lvmtime + calibs[ifile] > shoff - 1) & (shoff + 1 > lvmtime + calibs[ifile]))
+					plt.plot(lvmtime[ii], c0[ii], 'r')
+				a = 1
+			else:
+				print(f'no shots found in {lvmf}')
+	return lvm_files, calibs
+
+
+def special_extraction(lvm_files, shot, calibs):
+	# todo: NEED TO VERIFY THIS IS PROPERLY IDENTIFYING SIGNAL INTERVALS
+	timestamp = get_shot_timestamp(shot)
+	shot_ts = datetime.datetime.strptime(timestamp, '%m/%d/%Y %I:%M:%S %p')
+	for (cal, lvf) in zip(calibs, lvm_files):
+		lvm = lvm_read.read(lvf, dump_file=False, read_from_pickle=False)
+		# lvm_strt = datetime.datetime.strptime(lvm['Date'] + ':' + lvm['Time'].split('.')[0], '%Y/%m/%d:%H:%M:%S')  # CLOCK IS OFF???
+		lvm_strt = datetime.datetime.strptime(lvf.split('/')[-1].split('.')[0], '%m%d%Y%H%M%S')
+		lvm0 = lvm[0]
+		lvmtime = lvm0['data'][:, 0]
+		lvm_end = lvm_strt + datetime.timedelta(seconds=lvmtime[-1])
+		if lvm_strt < shot_ts < lvm_end:
+			# print(f'found shot {shot} in lvm file {lvf}')
+			t0 = (shot_ts - lvm_strt).seconds
+			ii = np.where((lvmtime + cal > t0 - 20) & (t0 + 90 > lvmtime + cal))
+			rtd_nam = lvm0['Channel names'][15:20]  # tc14-18
+			c0, c1, c2 = lvm0['data'][:, 15], lvm0['data'][:, 16], lvm0['data'][:, 17]
+			c3, c4 = lvm0['data'][:, 18], lvm0['data'][:, 19]
+			lvmtime, c0, c1, c2, c3, c4 = lvmtime[ii], c0[ii], c1[ii], c2[ii], c3[ii], c4[ii]
+			# for validating correct pulse alignment
+			# plt.plot(lvmtime, c0)  # ---------------
+			# plt.show()  # --------------------------
+			ipeak = min(
+				[np.where(c0 == max(c0))[0][0], np.where(c1 == max(c1))[0][0], np.where(c2 == max(c2))[0][0],
+				 np.where(c3 == max(c3))[0][0], np.where(c4 == max(c4))[0][0]])
+			b0, b1, b2, b3, b4 = mean(c0[:ipeak - 5]), mean(c1[:ipeak - 5]), mean(c2[:ipeak - 5]), mean(
+				c3[:ipeak - 5]), mean(c4[:ipeak - 5])
+			c0, c1, c2, c3, c4 = c0 - b0, c1 - b1, c2 - b2, c3 - b3, c4 - b4
+			lvmtime -= lvmtime[ipeak]
+			return lvmtime, rtd_nam, c0, c1, c2, c3, c4
+	print(f'shot {shot} MISSING from lvm data files')
+	return np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
+
+
+def calorimeter_current_scan_29mar22():
+	'''
+		plot fwhm vs instantaneous equilibrated dT vs beam current at different voltages
+	'''
+	
+	fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(ncols=2, nrows=2)  # 2, figsize=(10, 5))
+	
+	# direc = 'Y:/thermocouple/Calorimeter/'
+	# lvm_files1 = os.listdir(direc)
+	# lvm_files1 = [f'{direc}{lvmf}' for lvmf in lvm_files1 if lvmf.startswith('04062022')]  # lvms with date format
+	# calibs1 = np.zeros_like(lvm_files1)
+	lvm_files, calibs = special_calibration(redo=False)  # figure out calibs per lvm
+	# lvm_files = np.append(lvm_files1, lvm_files2)
+	# calibs = np.append(calibs1, calibs2)
+	
+	lbls = ['10', '12.5', '15']
+	# no TC data for GUI shots 25, 26, 27, 29, 32, 33, 34, 35
+	gui15kv = 508020 + np.array(
+		[22, 24, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 49, 51,
+		 52])  # NBI GUI shots for 15kv GUI setting plus offset to get to NBI tree shots #s
+	star15kv = 508020 + np.array([40, 43, 44, 46, 49])
+	gui12p5kv = np.append(508076 + np.array([16, 19, 20, 24, 25, 29, 33, 35, 37, 39]),
+	                      508149 + np.array([49, 54, 57]))
+	star12p5kv = np.append(508076 + np.array([16, 19, 20, 24, 25, 29, 35, 37]),
+	                       508149 + np.array([49, 54, 57]))
+	gui10kv = np.append(508149 + np.array([28, 30, 32, 34, 35, 37, 39, 63]),
+	                    508268 + np.array([1, 3]))
+	star10kv = np.append(508149 + np.array([30, 32, 34, 35, 37, 39, 63]),
+	                     508268 + np.array([1, 3]))
+	
+	# direc = 'Y:/thermocouple/Calorimeter/'
+	# lvm_files = os.listdir(direc)
+	# lvm_files = [f'{direc}{lvmf}' for lvmf in lvm_files if '2022' in lvmf]  # lvms with date format
+	
+	stuff = zip([star10kv, star12p5kv, star15kv], [gui10kv, gui12p5kv, gui15kv], lbls)
+	for iset, (star, shotset, lbl) in enumerate(stuff):
+		fwhm_arr, perv_arr, jtot_arr, ib_arr, dt_arr = np.array([]), np.array([]), np.array([]), np.array([]), np.array(
+			[])
+		for shot in shotset:
+			print(f'analyzing shot {shot}')
+			perv_av, jtot, ib_av = avg_perv(shot, Ej=True, ib_return=True)
+			perv_arr = np.append(perv_arr, perv_av)
+			ib_arr = np.append(ib_arr, ib_av)
+			jtot_arr = np.append(jtot_arr, jtot)
+			tt, rtd_nam, c0, c1, c2, c3, c4 = special_extraction(lvm_files, shot, calibs)
+			if tt is nan:
+				fwhm_arr = np.append(fwhm_arr, np.nan)
+				dt_arr = np.append(dt_arr, np.nan)
+			else:
+				dt0, dt1, dt2, dt3, dt4 = max(c0), max(c1), max(c2), max(c3), max(c4)  # already removed offset
+				# g = 1/sig*sqrt(2pi)*exp(-x^2/2sig^2)
+				r_therm = 45.  # thermocouple distance to center of calorimeter [mm]
+				r_edge = 75.  # radius of calorimeter [mm]
+				if abs(dt3 - np.mean(
+						[dt1, dt2, dt4])) > .25:  # dt3 (upper) is too high, probs insufficiently neutralized- omit
+					print(f'insufficient neutralization on shot {shot}')
+					sig_arr = [np.nan]
+					# sig_arr = [r_therm * np.sqrt(1 / (2 * np.log(dt0 / dt_edge))) for dt_edge in
+					#            [dt1, dt2, dt4]]  # [mm]
+					dt_arr = np.append(dt_arr, np.nan)
+				else:
+					sig_arr = [r_therm * np.sqrt(1 / (2 * np.log(dt0 / dt_edge))) for dt_edge in
+					           [dt1, dt2, dt3, dt4]]  # [mm]
+					islow_decay = np.where((tt > 25) & (tt < 100))[0]
+					if len(islow_decay) > 50:
+						line2fit = (c0[islow_decay] + c1[islow_decay] + c2[islow_decay] + c3[islow_decay] + c4[
+							islow_decay]) / 5.
+						time2fit = tt[islow_decay]
+						fit = np.polyfit(time2fit, line2fit, 1)
+						temp_interp = np.interp(0, tt, tt * fit[0] + fit[1])
+						dt_arr = np.append(dt_arr, temp_interp)
+					else:
+						dt_arr = np.append(dt_arr, np.nan)
+				sig = np.mean(sig_arr)
+				fwhm = 2 * np.sqrt(2 * np.log(2)) * sig
+				power_frac_to_cal = gauss2d_integral(nsig=r_edge / sig)
+				fwhm_arr = np.append(fwhm_arr, fwhm)
+		
+		istar = [np.where(shotset == starr)[0][0] for starr in star]
+		ax1.plot(ib_arr, perv_arr * 1.e6, 'o', label=lbl)
+		ax1.plot(ib_arr[istar], perv_arr[istar] * 1.e6, 'k+')
+		ax1.plot(ib_arr[-1], perv_arr[-1] * 1.e6, 'rx')
+		ax2.plot(ib_arr, fwhm_arr, 'o')
+		ax2.plot(ib_arr[istar], fwhm_arr[istar], 'k+')
+		ax3.plot(ib_arr, dt_arr / jtot_arr, 'o')
+		ax3.plot(ib_arr[istar], dt_arr[istar] / jtot_arr[istar], 'k+')
+		ax4.plot(ib_arr, dt_arr, 'o')
+		ax4.plot(ib_arr[istar], dt_arr[istar], 'k+')
+	# for i, sh in enumerate(shotset):
+	# 	ax4.annotate(str(sh), (ib_arr[i], dt_arr[i]))
+	
+	fs = 14
+	ax1.legend()
+	ax1.set_ylabel('perveance (e-6)', fontsize=fs)
+	ax2.set_ylabel('FWHM (mm)', fontsize=fs)
+	ax3.set_ylabel('$\Delta$T/$J_{tot}$', fontsize=fs)
+	ax4.set_ylabel('cal $\Delta$T', fontsize=fs)
+	
+	for ax in [ax1, ax2, ax3, ax4]:
+		ax.set_xlabel('$I_b$ (A)', fontsize=fs)
+		ax.tick_params(labelsize=12)
+	plt.tight_layout()
+
+
+def cal_guass_fit_offcenter(shot):
+	# center, down, right, up, left
+	lvm_files, calibs = special_calibration(redo=False)  # figure out calibs per lvm
+	t, rtd_nam, c0, c1, c2, c3, c4 = special_extraction(lvm_files, shot, calibs)
+	# t, c0, c1, c2, c3, c4 = cal_temp_sigs(shot, calonly=True)
+	dt0, dt1, dt2, dt3, dt4 = max(c0), max(c1), max(c2), max(c3), max(c4)  # already removed offset
+	'''
+	thermocouples are 45 mm off center
+	calorimeter diameter 150 mm
+	'''
+	maxdt = max([dt0, dt1, dt2, dt3, dt4])
+	normvals = [dt0 / maxdt, dt1 / maxdt, dt2 / maxdt, dt3 / maxdt, dt4 / maxdt]  # normalized thermocouple data
+	xtherms, ytherms = [0, 0, 45, 0, -45], [0, -45, 0, 45, 0]  # x, y coords of thermocouples [mm]
+	
+	def minfunc(xysig):
+		rtherms = [np.sqrt((xtherms[i] - xysig[0]) ** 2 + (ytherms[i] - xysig[1]) ** 2) for i in range(5)]  # [mm]
+		thermvals = [np.exp(-rtherms[i] ** 2 / (2 * xysig[2] ** 2)) for i in range(5)]
+		normsim = [thermvals[i] / max(thermvals) for i in range(5)]  # normalize to compare to normalized real data
+		diff = np.array([normvals[i] - normsim[i] for i in range(5)])*10000
+		return np.sqrt(np.sum(diff ** 2))
+	
+	xguess = [0, 0, 10]  # guess xoffset=0, yoffset=0, sigma=10mm
+	res = minimize(minfunc, xguess, method='SLSQP')
+	print(res.message)
+	
+	fit = res.x  # xysig?
+	rtherms = [np.sqrt((xtherms[i] - fit[0]) ** 2 + (ytherms[i] - fit[1]) ** 2) for i in range(5)]  # [mm]
+	thermvals = [np.exp(-rtherms[i] ** 2 / (2 * fit[2] ** 2)) for i in range(5)]
+	normsim = [thermvals[i] / max(thermvals) for i in range(5)]  # normalize to compare to normalized real data
+	fwhm = 2 * np.sqrt(2 * np.log(2)) * fit[2]
+	
+	fig, (ax1, ax2) = plt.subplots(ncols=2)
+	for c, l in zip([c0, c1, c2, c3, c4], ['center', 'lower', 'right', 'upper', 'left']):
+		ax1.plot(t, c, label=l)
+	ax1.legend()
+	ax1.set_xlabel('time')
+	ax1.set_ylabel('Temp \degree C')
+	rr = np.linspace(0, 1.1*max(rtherms), endpoint=True)
+	ax2.plot(rr, np.exp(-rr ** 2 / (2 * fit[2] ** 2)))
+	ax2.plot(rtherms, normvals, 's')
+	print(f'x-shift: {fit[0]:.1f} mm\ny-shift: {fit[1]:.1f} mm\nfwhm: {fwhm:.1f} mm')
+	plt.show()
+
+
+def cal_gauss_fit(shot, ret='fwhm'):
+	"""
+	:param shot:
+	:param ret:  'fwhm'- returns full width at half max of guassian
+				'power_frac_to_cal'- returns power fraction that hits calorimeter
+				'efold'- returns e-folding length of gaussian
+	:return:
+	"""
+	# center, down, right, up, left
+	t, c0, c1, c2, c3, c4 = cal_temp_sigs(shot, calonly=True)
+	dt0, dt1, dt2, dt3, dt4 = max(c0), max(c1), max(c2), max(c3), max(c4)  # already removed offset
+	'''
+	thermocouples are 45 mm off center
+	calorimeter diameter 150 mm
+	'''
+	# g = 1/sig*sqrt(2pi)*exp(-x^2/2sig^2)
+	r_therm = 45.  # thermocouple distance to center of calorimeter [mm]
+	r_edge = 75.  # radius of calorimeter [mm]
+	if abs(dt3 - np.mean([dt1, dt2, dt4])) > .25:  # dt3 (upper) is too high, probably insufficiently neutralized- omit
+		print(f'insufficient neutralization for shot {shot}')
+		sufficient_neut = 0
+		sig_arr = [r_therm * np.sqrt(1 / (2 * np.log(dt0 / dt_edge))) for dt_edge in [dt1, dt2, dt4]]  # [mm]
+	else:
+		sufficient_neut = 1
+		sig_arr = [r_therm * np.sqrt(1 / (2 * np.log(dt0 / dt_edge))) for dt_edge in [dt1, dt2, dt3, dt4]]  # [mm]
+	sig = np.mean(sig_arr)
+	fwhm = 2 * np.sqrt(2 * np.log(2)) * sig
+	power_frac_to_cal = gauss2d_integral(nsig=r_edge / sig)
+	if ret == 'fwhm':
+		return fwhm, sufficient_neut
+	elif ret == 'power_frac_to_cal':
+		return power_frac_to_cal, sufficient_neut
+	elif ret == 'efold':
+		return np.sqrt(2)*sig, sufficient_neut
+
+
+def gauss2d_integral(nsig=1., inspect=False):
+	# nsig: compute volume contained within nsig of 2d gaussian
+	x = np.linspace(-100, 100, num=1000, endpoint=True)
+	dx, sig = x[1] - x[0], 10
+	y = 1 / (sig * np.sqrt(2 * np.pi)) * np.exp(-x ** 2 / (2 * sig ** 2))
+	area = np.sum(y) * dx  # check: this should be = 1
+	vol2d = np.sum(y * 2 * np.pi * abs(x) * dx) / 2
+	vol2d_calc = np.sqrt(2 * np.pi) * sig
+	y2 = np.copy(y)
+	y2[abs(x) > nsig * sig] = 0
+	inside_vol = np.sum(y2 * 2 * np.pi * abs(x) * dx) / 2  # double counting since x extends both pos and neg
+	ratio_inside = inside_vol / vol2d
+	if inspect:
+		plt.plot(x, y)
+		plt.show()
+	return ratio_inside
+
+
+def neutralization_scan_7feb22():
+	desc = ['10', '20', '30']
+	sh20psi = 105000 + np.array([81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100])
+	# starts at 18 were actually neutralizer=off, since beam lasts until 15, should be same as starting at 16
+	ns20psi = np.array([18, 18, 16, 16, 14, 14, 12, 12, 10, 10, 8, 8, 6, 6, 4, 4, 2, 2, 0, 0])
+	sh30psi = 105100 + np.array([1, 2, 3, 4, 5, 7, 8, 9, 10])
+	ns30psi = np.array([8, 8, 6, 10, 4, 12, 2, 2, 14])
+	sh10psi = 105100 + np.array([11, 12, 13, 14, 15, 16, 17, 18])
+	ns10psi = np.array([8, 6, 10, 4, 12, 2, 14, 14])
+	fig, (ax1, ax2) = plt.subplots(ncols=2, figsize=(10, 5))
+	for ii, (ns, ss) in enumerate(zip([ns10psi, ns20psi, ns30psi], [sh10psi, sh20psi, sh30psi])):
+		dt_meas, dt_pred, pow_frac, dt_up = np.array([]), np.array([]), np.array([]), np.array([])
+		for shot in ss:
+			dtm, dtp, dt, _ = cal_dtemp(shot, dbug=False, more=True)
+			pf, _ = cal_gauss_fit(shot)
+			dt_meas = np.append(dt_meas, dtm)
+			dt_pred = np.append(dt_pred, dtp)
+			pow_frac = np.append(pow_frac, pf)
+			dt_up = np.append(dt_up, dt[3] - np.mean([dt[1], dt[2], dt[4]]))  # up - mean(down, right, left)
+		ax1.plot(ns, dt_meas / (pow_frac * dt_pred), 'o', label=desc[ii])
+		ax2.plot(ns, dt_up, 'o')
+	ax1.legend(title='GVC psi')
+	xt = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18]
+	for ax in [ax1, ax2]:
+		ax.set_xticks(xt)
+		ax.set_xlabel('neutralizer start (ms)')
+	ax1.set_ylabel('meas/pred power fraction')
+	ax2.set_ylabel('extra $\Delta T$ on upper')
+	plt.tight_layout()
+
+
+def compare_thermocouple_sigs_to_russian_trace():
+	bestshot = 105124  # run section below to set bestshot
+	# sh1 = 105100 + np.array(
+	# 	[24, 27, 31, 32, 35, 45, 47, 48, 49, 50, 51, 52, 53, 54, 55, 57, 58, 59, 61, 62, 63, 64, 65, 67, 68, 69, 71, 73,
+	# 	 74, 75, 76])
+	# max_dt, bestshot = -1, -1
+	# dt_arr = []
+	# for shot in sh1:
+	# 	t, c0, c1, c2, c3, c4 = cal_temp_sigs(shot, calonly=True)
+	# 	dt_arr.append(max(c0))
+	# 	if max(c0) > max_dt:
+	# 		max_dt = max(c0)
+	# 		bestshot = shot
+	# print(f'best shot is {bestshot} with dt={max_dt}')
+	t, c0, c1, c2, c3, c4 = cal_temp_sigs(bestshot, calonly=True)
+	for c in [c0, c1, c2, c3, c4]:
+		plt.plot(t, c)
+	plt.xlabel('time [s]')
+	plt.ylabel('temp [degC]')
+	plt.tight_layout()
+	plt.xlim(-5, 30)
+	plt.grid()
+
+
+def perveance_scan_28feb22():
+	'''
+	HAL data today: compare to perveance_scan_7feb22()
+	'''
+	sh_v = 105300 + np.array([40, 41, 42, 44, 45, 53, 54, 55, 57, 58, 60, 61])  # vb scan
+	sh_i = 105300 + np.array([65, 66, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 83, 84, 85, 87])  # ib scan
+	sh3 = 105300 + np.array([89, 90, 93, 94])  # higher current, pulling down voltage to access higher perv
+	sh4 = 105300 + np.array(
+		[95, 96, 97, 98, 99, 101, 102, 103, 104, 105, 106, 107, 108])  # Iarc=400, voltage scan at lower ib
+	fig, (ax1) = plt.subplots(ncols=1)  # 2, figsize=(10, 5))
+	for i, shotset in enumerate([sh_v, sh_i, sh3, sh4]):
+		print(shotset)
+		perv_arr = np.array([])
+		for shot in shotset:
+			perv_arr = np.append(perv_arr, avg_perv(shot))
+		yvals = np.ones_like(perv_arr) + i / 10.
+		ax1.plot(perv_arr * 1.e6, yvals, 'o')
+		ax1.plot(perv_arr[-1] * 1.e6, yvals[-1], 'kd')
+	
+	ax1.set_xlabel('perveance (e-6)')
+	ax1.set_ylabel('placeholder')
+	plt.tight_layout()
+
+
+def stray_field_test_6apr22():
+	clrs = plt.rcParams['axes.prop_cycle'].by_key()['color']
+	tp = np.linspace(-50, 100, endpoint=True)
+	fig = plt.figure(tight_layout=True, figsize=(10, 8))
+	gs = gridspec.GridSpec(2, 3)
+	ax1 = fig.add_subplot(gs[0, 0])
+	ax2 = fig.add_subplot(gs[0, 1])
+	ax3 = fig.add_subplot(gs[0, 2])
+	ax_bot = fig.add_subplot(gs[1, :])
+	topax = [ax1, ax2, ax3]
+	
+	lbls = ['no fields', 'high fields', 'highest fields']
+	nofields = 105500 + np.array([94, 95, 96])
+	fields = 105500 + np.array([88, 89, 93])
+	highfields = 105500 + np.array([97, 99, 100])
+	dt_arr = np.zeros((5, 3))
+	err_arr = np.zeros((5, 3))
+	for i, (lbl, shots) in enumerate(zip(lbls, [nofields, fields, highfields])):
+		etot = 0.
+		for sh in shots:
+			_, shot_etot = avg_perv(sh, Ej=True)
+			etot += shot_etot
+		etot = etot / len(shots) * 1.e-3  # kJ
+		cntr, dwn, rght, uppr, lft, shot_dt, minmax = get_thermocouple_numbers(shots, tp, ret_minmax=True)
+		errs = (minmax[:, 1] - minmax[:, 0]) / 2.
+		err_arr[:, i] = errs
+		dt_norm = [dt / etot for dt in shot_dt]
+		dt_arr[:, i] = dt_norm  # shot_dt
+		topax[i].plot(tp, cntr / etot, clrs[0], label='center')  # correct labeling
+		topax[i].plot(tp, dwn / etot, clrs[1], label='down')
+		topax[i].plot(tp, rght / etot, clrs[2], label='right')
+		topax[i].plot(tp, uppr / etot, clrs[3], label='up')
+		topax[i].plot(tp, lft / etot, clrs[4], label='left')
+	
+	for i in range(5):
+		ax_bot.errorbar(np.array([-1, 0, 1]) - .1 + .05 * i, dt_arr[i, :], yerr=err_arr[i, :], c=clrs[i], capsize=5)
+	
+	fs = 12
+	ax1.legend(fontsize=fs)
+	ax1.set_ylabel('thermocouple\n$\Delta T/E_{tot}$ (\degree C/kJ)', fontsize=fs)
+	# ax1.set_xlabel('time rel to beam')
+	ax2.set_ylim(ax1.get_ylim())
+	ax2.set_xlabel('time rel to beam', fontsize=fs)
+	ax_bot.set_ylabel('thermocouple\n$\Delta T/E_{tot}$ (deg C/kJ)', fontsize=fs)
+	ax_bot.set_xlim((-1.5, 1.5))
+	ax_bot.set_xticks([-1, 0, 1])
+	
+	ax1.set_title('No Fields', fontsize=fs)
+	ax2.set_title('With Fields', fontsize=fs)
+	ax3.set_title('High Fields', fontsize=fs)
+	ax_bot.set_xticklabels(['no fields', 'fields', 'high fields'], fontsize=fs)
+	for ax in [ax1, ax2, ax3, ax_bot]:
+		ax.tick_params(labelsize=fs)
+	plt.tight_layout()
+	plt.show()
+
+
+# lvmf = 'Y:/thermocouple/Calorimeter/06042022______.lvm'
+# nbionly = 5082** + np.array([])
+# nbifields = 5082** + np.array([])
+#
+# for shotset in [nbionly, nbifields]:
+#
+# 	for shot in shotset:
+# 		tt, c0, c1, c2, c3, c4 = cal_temp_sigs(shot)
 
 
 if __name__ == '__main__':
-	# todo: beam halfwidth vs perveance scan
+	# offcenter = 508397
+	# centered = 508188
+	# cal_guass_fit_offcenter(offcenter)
+	
+	# stray_field_test_6apr22()
+	# calorimeter_current_scan_29mar22()
+	
+	# compare_neutralizer_onoff()
+	perveance_scan_7feb22(plot_vs='efold')
+	# perveance_scan_28feb22()
+	# compare_thermocouple_sigs_to_russian_trace()
+	# neutralization_scan_7feb22()
+	# realigned_beam_4feb22()
+	# gauss2d_integral(2, inspect=True)
+	# cal_gauss_fit([105048])  # 65
 	# calorimeter_positional_variation()
-	beam_realignment()
+	# beam_realignment()
 	# calorimeter_21Jan()  # coincides w/settings used for 14Jan Perveance scan
 	plt.show()

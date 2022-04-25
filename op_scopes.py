@@ -24,6 +24,18 @@ def plot_sig(ax, tree, node, lbl=None):
 		print('no data for node {}'.format(node))
 
 
+def avg_density_during_beam(shot):
+	try:
+		tree = get_tree_conn(shot, treename='ltx_b')
+		(tt, ne) = get_data(tree, '.diagnostics.microwave.interferom.phase_comp.ne_l')  # [m^-2]
+		(tbeam, vbeam) = get_data(tree, '.oper_diags.ltx_nbi.source_diags.v_hvps')
+		tbeamon, tbeamoff = tbeam[np.where(vbeam > 1000)][0], tbeam[np.where(vbeam > 1000)][-1]
+		return np.mean(ne[np.where((tt >= tbeamon) & (tt < tbeamoff))])
+	except mds.mdsExceptions.TreeNODATA:
+		print(f'trouble fetching MDSPlus data for shot {shot}')
+		return np.nan
+
+
 def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
 	if arc_iv:
 		fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6), (ax7, ax8)) = plt.subplots(nrows=4, ncols=2, sharex=True)
@@ -80,8 +92,14 @@ def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
 				(tiarc, iarc) = get_data(t, '{}.ltx_nbi.source_diags.i_arc'.format(prefix))
 				(tarc, varc) = get_data(t, '{}.ltx_nbi.source_diags.v_arc'.format(prefix))
 				iarc = np.interp(tarc, tiarc, iarc)
-				perv = ibeam / vbeam ** 1.5 * 1.e6  # uPerv
-				perv[np.where(vbeam <= v_thresh)] = np.nan
+				perv = np.zeros_like(ibeam)
+				perv[:] = np.nan
+				t_beamon = np.where(vbeam >= v_thresh)  # only look at where beam is above 5kV
+				pad = 0.25e-3  # remove this amt from beginning/end of beam
+				t_window = np.where((tbeam >= tbeam[t_beamon[0][0]] + pad) & (tbeam <= tbeam[t_beamon[0][-1]] - pad))
+				perv[t_window] = ibeam[t_window] / vbeam[t_window] ** 1.5 * 1.e6  # uPerv
+			# perv = ibeam / vbeam ** 1.5 * 1.e6  # uPerv
+			# perv[np.where(vbeam <= v_thresh)] = np.nan
 			else:
 				tbeam, ibeam, vbeam, tarc, iarc, varc, perv = np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
 			pbeam = ibeam * vbeam / 1000.  # kW
@@ -102,14 +120,15 @@ def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
 	# ax2.axis('off')
 	
 	vav /= 1000.
-	print('avg beam voltage: {} kV'.format(vav))
+	print('avg beam voltage: {:.1f} kV'.format(vav))
 	ax6r.axhline(vav, c='k', ls='--', alpha=0.5)
-	ax6r.annotate('<V>={:.2f}'.format(vav), (twin1, vav))
-	print('avg beam power: {} kW'.format(pav))
+	ax6r.annotate('<V>={:.1f}'.format(vav), (twin1, vav))
+	print('avg beam power: {:.1f} kW'.format(pav))
 	ax8r.axhline(pav, c='k', ls='--', alpha=0.5)
-	ax8r.annotate('<P>={:.2f}'.format(pav), (twin1, pav))
+	ax8r.annotate('<P>={:.1f}'.format(pav), (twin1, pav))
 	ax1.set_ylim(bottom=0.)
 	ax2r.set_ylim(bottom=0.)
+	plt.grid(b=True, which='minor')
 
 
 def plot_nbi(shots):
@@ -289,13 +308,48 @@ def quick_perv(shots):
 	plt.show()
 
 
+def beam_nobeam(shots, twin=[450, 480]):
+	fig, ax = plt.subplots()
+	axr = ax.twinx()
+	for shot in shots:
+		try:
+			tree = get_tree_conn(shot, treename='ltx_b')
+			(tip, ip) = get_data(tree, '.diagnostics.magnetic.ip_rog', times=None)
+			(tnel, nel) = get_data(tree, '.diagnostics.microwave.interferom.phase_comp.ne_l')  # [m^-2]
+			ax.plot(tip * 1e3, -ip * 1.e-3, label=shot)
+			axr.plot(tnel * 1e3, nel)
+			if is_nbi_shot(shot, tree):
+				(tibeam, ibeam) = get_data(tree, '.oper_diags.ltx_nbi.source_diags.i_hvps')
+				(tbeam, vbeam) = get_data(tree, '.oper_diags.ltx_nbi.source_diags.v_hvps')
+				ibeam = np.interp(tbeam, tibeam, ibeam)
+				ax.plot(tbeam * 1e3, ibeam * vbeam * 1.e-6, 'b')
+		except:
+			print(f'shot {shot} did not pan out')
+	fs = 12
+	ax.set_xlim(twin)
+	ax.set_ylim((0, 150))
+	ax.set_ylabel('$I_p$ (kA)', fontsize=fs)
+	ax.set_xlabel('time (ms)', fontsize=fs)
+	axr.set_ylabel('$n_eL$ (m$^2$) $P_{nbi}$ (MW)', fontsize=fs)
+	axr.set_ylim((0, 1.5e19))
+	ax.legend(fontsize=fs)
+	ax.tick_params(labelsize=fs)
+	axr.tick_params(labelsize=fs)
+	plt.tight_layout()
+	plt.show()
+
+
 if __name__ == '__main__':
-	quick_perv([104818, 104822, 104826, 104830, 104831, 104832, 104839, 104842, 104844, 104845, 104847, 104849, 104850,
-	            104853, 104856, 104857, 104858, 104859, 104861, 104862, 104863, 104864, 104865])
-	
+	# beam_nobeam([103658, 103617])
+	# beam_nobeam([103446, 103465])
+	# beam_nobeam([103898, 103899])
+	# quick_perv(105400 + np.array([28, 29, 30, 31, 32, 33]))
+	# nbi_ops([105428, 105427], arc_iv=True, nbi_win=[.45, .475])
+	# nbi_ops(105100 + np.array([83, 88, 89]), nbi_win=[.46, .485])
+	nbi_ops([105692, 105729], nbi_win=[.46, .48], arc_iv=False)
 	'''
 	nbi_ops([104584], arc_iv=True, nbi_win=[.46,.475])
-	nbi_ops([103617], arc_iv=True)#, nbi_win=[.46, .475])
+	nbi_ops([103658, 103617], arc_iv=True)#, nbi_win=[.46, .475])
 	# nbi_ops([103465], arc_iv=True, nbi_win=[.46, .475])
 	plt.show()
 	

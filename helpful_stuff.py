@@ -7,7 +7,7 @@ import numpy as np
 import MDSplus
 import re
 import datetime
-from bills_LTX_MDSplus_toolbox import get_tree_conn, get_data
+from bills_LTX_MDSplus_toolbox import *
 import glob
 import os
 
@@ -52,6 +52,16 @@ def get_current_ltx_shot():
 	shot = int(shotdone.read())
 	
 	return shot
+
+
+def get_shot_timestamp(shot):
+	if shot > 200000:
+		treename = 'ltx_nbi'
+	else:
+		treename = 'ltx_b'
+	tree = get_tree_conn(shot, treename=treename)
+	
+	return get_data(tree, '.metadata.timestamp')
 
 
 def get_shots_since(date='09/01/21', nbi=True):
@@ -284,6 +294,13 @@ def ltx_limiter():
 	return rlimiter, zlimiter, rminor_lim, theta_lim
 
 
+def make_patch_spines_invisible(ax):
+	ax.set_frame_on(True)
+	ax.patch.set_visible(False)
+	for sp in ax.spines.values():
+		sp.set_visible(False)
+
+
 def color_cycle_demo():
 	# i always forget how to use the color cycle
 	clrs = plt.rcParams['axes.prop_cycle'].by_key()['color']
@@ -295,6 +312,78 @@ def color_cycle_demo():
 	# plt.plot(np.arange(10), clrs[0])
 	# plt.plot(np.arange(10) * 1.5, clrs[1])
 	a = 1
+
+
+def calculate_perv_pwr(shot):
+	if shot > 200000:
+		treename = 'ltx_nbi'
+		prefix = ''
+		nbi_only = True
+	else:
+		treename = 'ltx_b'
+		prefix = '.oper_diags.ltx_nbi'
+		nbi_only = False
+	try:
+		tree = get_tree_conn(shot, treename=treename)
+		(ti, ib) = get_data(tree, f'{prefix}.source_diags.i_hvps')
+		(tv, vb) = get_data(tree, f'{prefix}.source_diags.v_hvps')
+		ib = np.interp(tv, ti, ib)  # get ib onto vb axis
+		t_beamon = np.where(vb > 5000)  # only look at where beam is above 5kV
+		pad = 0.25e-3  # remove this amt from beginning/end of beam
+		t_window = np.where((tv >= tv[t_beamon[0][0]] + pad) & (tv <= tv[t_beamon[0][-1]] - pad))
+		perv, pwr = np.ones_like(vb), np.ones_like(vb)
+		perv[:], pwr[:] = np.nan, np.nan
+		perv[t_window] = ib[t_window] / vb[t_window] ** 1.5
+		pwr[t_window] = ib[t_window] * vb[t_window]  # [W]
+		av_perv, av_pwr = np.nanmean(perv), np.nanmean(pwr)
+		dperv, dpwr = (np.nanmax(perv) - np.nanmin(perv)) / 2., (np.nanmax(pwr) - np.nanmin(pwr)) / 2.
+		return av_perv, dperv, av_pwr, dpwr
+	except mds.mdsExceptions.TreeNODATA:
+		print(f'trouble fetching MDSPlus data for shot {shot}')
+		return np.nan, np.nan, np.nan, np.nan
+
+
+def avg_perv(shot, Ej=False, ib_return=False, twin=None):
+	if shot > 200000:
+		treename = 'ltx_nbi'
+		prefix = ''
+	else:
+		treename = 'ltx_b'
+		prefix = '.oper_diags.ltx_nbi'
+	tree = get_tree_conn(shot, treename=treename)
+	(ti, ib) = get_data(tree, f'{prefix}.source_diags.i_hvps')
+	(tv, vb) = get_data(tree, f'{prefix}.source_diags.v_hvps')
+	ib = np.interp(tv, ti, ib)  # get ib onto vb axis
+	# t_beamon = np.where(vb > 5000)  # only look at where beam is above 5kV
+	if twin is None:
+		# t_beamon = np.where(
+		# 	(.46 < tv) & (tv < .463))  # look between 460-463ms for these shots (ignore rough Ibeam startup)
+		ibeamon = np.where(vb > 5000)[0]
+		dt = 0.25e-3
+		(ton, toff) = (tv[ibeamon[0]]+dt, tv[ibeamon[-1]]-dt)
+		t_beamon = np.where((ton < tv) & (tv < toff))
+	else:
+		t_beamon = np.where((twin[0] < tv) & (tv < twin[1]))
+	pb = ib * vb  # beam power [W]
+	tot_joules = np.sum([pb[i] * (tv[i] - tv[i - 1]) for i in np.arange(1, len(tv))])
+	if len(t_beamon[0]) < 10:
+		av_perv = np.nan
+		av_ib = np.nan
+	else:
+		perv = np.ones_like(vb)
+		perv[:] = np.nan
+		perv[t_beamon] = ib[t_beamon] / vb[t_beamon] ** 1.5
+		av_perv = np.nanmean(perv)
+		av_ib = np.nanmean(ib[t_beamon])
+	if Ej:
+		if ib_return:
+			return av_perv, tot_joules, av_ib
+		else:
+			return av_perv, tot_joules
+	if ib_return:
+		return av_perv, av_ib
+	else:
+		return av_perv
 
 
 class SimpleSignal:

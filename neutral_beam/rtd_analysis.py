@@ -1,9 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from helpful_stuff import SimpleSignal
+from helpful_stuff import avg_perv
 import lvm_read
 from bills_LTX_MDSplus_toolbox import *
 import pickle
+from neutral_beam.calorimeter_analysis import calculate_perv_pwr
+from op_scopes import avg_density_during_beam
 
 # shots = [103751, 103752, 103753]
 shots_since_9_1_21 = [103734, 103735, 103736, 103737, 103738, 103739, 103740, 103742, 103743, 103744, 103745, 103746,
@@ -184,33 +186,12 @@ def plot_rtd_sigs(shot):
 		plt.ylabel('Temp (degC)')
 
 
-def avg_perv(shot, Ej=False):
-	tree = get_tree_conn(shot, treename='ltx_b')
-	(ti, ib) = get_data(tree, '.oper_diags.ltx_nbi.source_diags.i_hvps')
-	(tv, vb) = get_data(tree, '.oper_diags.ltx_nbi.source_diags.v_hvps')
-	ib = np.interp(tv, ti, ib)  # get ib onto vb axis
-	# t_beamon = np.where(vb > 5000)  # only look at where beam is above 5kV
-	t_beamon = np.where((.46 < tv) & (tv < .463))  # look between 460-463ms for these shots (ignore rough Ibeam startup)
-	pb = ib * vb  # beam power [W]
-	tot_joules = np.sum([pb[i] * (tv[i] - tv[i - 1]) for i in np.arange(1, len(tv))])
-	if len(t_beamon[0]) < 10:
-		av_perv = np.nan
-	else:
-		perv = ones_like(vb)
-		perv[:] = np.nan
-		perv[t_beamon] = ib[t_beamon] / vb[t_beamon] ** 1.5
-		av_perv = np.nanmean(perv)
-	if Ej:
-		return av_perv, tot_joules
-	else:
-		return av_perv
-
-
 def get_rtd_quick_response(shots):
 	tp = np.linspace(-20, 100, num=1000, endpoint=True)
 	num = 0
 	up = np.zeros((len(tp), 4))
 	dn = np.zeros((len(tp), 4))
+	dmp = np.zeros((len(tp), 11))
 	for ish, shot in enumerate(shots):
 		_, tot_j = avg_perv(shot, Ej=True)
 		lvm_file = f'{dir}{shot}.lvm'
@@ -227,19 +208,24 @@ def get_rtd_quick_response(shots):
 					lvm0['data'][:ibeam - 5, iscrp + 1])) / tot_j
 				dn[:, iscrp] += np.interp(tp, t, lvm0['data'][:, iscrp + 5] - mean(
 					lvm0['data'][:ibeam - 5, iscrp + 5])) / tot_j
+			for idmp in np.arange(11):
+				dmp[:, idmp] += np.interp(tp, t,
+				                          lvm0['data'][:, idmp + 9] - mean(lvm0['data'][:ibeam - 5, idmp + 9])) / tot_j
 			num += 1
 	up /= num
 	dn /= num
-	
+	dmp /= num
 	# sigs 2,3,4 on uppers seem good to use to locate tbeam0
 	ibeam = np.where(np.diff(up[:, 1]) == max(np.diff(up[:, 1])))[0][0]  # use scraper number 2
 	quick = 10  # num of seconds to wait for temp response
 	iquick = int(quick / (tp[1] - tp[0]))  # num of data points in quick
-	dt = np.zeros(8)
+	dt = np.zeros(19)
 	for i in range(4):
 		dt[i] = max(up[ibeam:ibeam + iquick, i])
 		dt[i + 4] = max(dn[ibeam:ibeam + iquick, i])
-	return tp, up, dn, None, dt
+	for i in range(11):
+		dt[i + 8] = max(dmp[ibeam:ibeam + iquick, i])
+	return tp, up, dn, dmp, dt
 
 
 def perveance_scan_rtd_analysis(shots):
@@ -308,8 +294,8 @@ def compare_rtd_signals():
 	for i in [0, 1, 2, 3]:
 		ax1.plot(tp, preup[:, i] * 1.e3, clrs[i], label=str(i))
 		ax2.plot(tp, postup[:, i] * 1.e3, clrs[i])
-		ax3.plot(tp, predn[:, i] * 1.e3, clrs[i+4], label=str(i))
-		ax4.plot(tp, postdn[:, i] * 1.e3, clrs[i+4])
+		ax3.plot(tp, predn[:, i] * 1.e3, clrs[i + 4], label=str(i))
+		ax4.plot(tp, postdn[:, i] * 1.e3, clrs[i + 4])
 	ax1.legend(title='scraper #')
 	ax3.legend(title='scraper #')
 	
@@ -334,17 +320,50 @@ def compare_rtd_signals():
 	plt.show()
 
 
+def shinethrough_estimate_8feb22():
+	beamnoplasma = 105200 + np.array([3, 4, 5, 6, 7, 10, 11])
+	beamintoplasma = 105100 + np.array([77, 78, 79, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 97, 98, 99, 100])
+	xdens = np.linspace(1, 10)
+	
+	av_pwr, dumpdt_arr = [], []
+	for shot in beamnoplasma:
+		_, _, avpwr, _ = calculate_perv_pwr(shot)
+		av_pwr.append(avpwr)
+		tdmp, _, _, dmp, dt = get_rtd_quick_response([shot])
+		dumpdt_arr.append(np.sum(dt[8:]))
+		# plt.plot([avpwr] * 11, dt[8:], 'o')
+	fit = np.polyfit(av_pwr, dumpdt_arr, 1)  # [slope, offset]
+	pwr = np.linspace(300, 600)
+	dumpdt_v_pwr = pwr * fit[0] + fit[1]
+	
+	av_density, plasma_dump_dt, noplasma_dt = [], [], []
+	for shot in beamintoplasma:
+		avdens = avg_density_during_beam(shot)
+		_, _, _, _, dt = get_rtd_quick_response([shot])
+		_, _, avpwr, _ = calculate_perv_pwr(shot)  # use beam power to estimate what signal on dump would be
+		pred_dtval = avpwr*fit[0]+fit[1]
+		noplasma_dt.append(pred_dtval)
+		plasma_dump_dt.append(np.sum(dt[8:]))
+		av_density.append(avdens)
+	shinethrough = np.array(plasma_dump_dt) / np.array(noplasma_dt)
+	plt.plot(av_density, shinethrough, 'o')
+	a=1
+
+
 if __name__ == '__main__':
+	shinethrough_estimate_8feb22()
+	
 	# do_rtd_analysis()
 	# plot_rtd_sigs(104849)
-	perv_scan_14Jan22 = 104800 + np.array([18, 22, 26, 30, 31, 32, 33, 37, 38, 39, 42, 44, 49, 50, 53, 54, 56, 57, 58,
-	                                       59, 61, 62, 63, 64, 65])
+	# perv_scan_14Jan22 = 104800 + np.array([18, 22, 26, 30, 31, 32, 33, 37, 38, 39, 42, 44, 49, 50, 53, 54, 56, 57, 58,
+	#                                        59, 61, 62, 63, 64, 65])
 	# perveance_scan_rtd_analysis(perv_scan_14Jan22)
 	
-	ir_24jan22 = 104900 + np.array([6, 8, 9, 11, 13, 17, 18, 20, 23])
+	# ir_24jan22 = 104900 + np.array([6, 8, 9, 11, 13, 17, 18, 20, 23])
 	# perveance_scan_rtd_analysis(ir_24jan22)
-	ir_26jan22 = np.arange(15) + 104960
+	# ir_26jan22 = np.arange(15) + 104960
 	# perveance_scan_rtd_analysis(ir_26jan22)
 	
-	compare_rtd_signals()
+	# compare_rtd_signals()
+	
 	plt.show()
