@@ -127,17 +127,18 @@ if __name__ == '__main__':
 	frac_demo = 0
 	show1036170301 = 0
 	if demo:
-		te = 100  # plasma electron temp [eV]
-		ti = 100  # plasma ion temp [eV]
+		te = 500  # plasma electron temp [eV]
+		ti = 500  # plasma ion temp [eV]
 		eb = 20000  # beam energy [eV]
 		ni = ne = 1.e19  # plasma density [#/m^3]
 		lnlamb = 15.  # unverified
 		Zb = 1.  # beam charge number
 		Ab = 1.  # beam atomic number  (?)
 		axs = plot_collision_freqs()
-		te = 200
-		ti = 200
-		plot_collision_freqs(axs=axs)
+		ni = ne = 3.e19
+		te = 500
+		ti = 500
+		plot_collision_freqs(axs=axs, ls='--')
 	if frac_demo:
 		plot_fractional_energy_transfer(eb=11.e3, mb=1, mi=1, interps=[150, 250])
 	if show1036170301:
@@ -151,7 +152,7 @@ if __name__ == '__main__':
 		# EARLY
 		te = 250.  # plasma electron temp [eV]
 		ti = 50.  # plasma ion temp [eV]
-		eb = 11000.  # beam energy [eV]
+		eb = 20000.  # beam energy [eV]
 		ni = .75e19
 		ne = 1.e19  # plasma density [#/m^3]
 		lnlamb = 15.  # unverified
@@ -159,10 +160,10 @@ if __name__ == '__main__':
 		Ab = 1.  # beam atomic number  (?)
 		axs = plot_collision_freqs()
 		# LATE
-		ti = 250.
-		ni = 1.75e19
-		ne = 2.e19
-		plot_collision_freqs(axs, ls='--', showlegend=False)
+		# ti = 250.
+		# ni = 1.75e19
+		# ne = 2.e19
+		# plot_collision_freqs(axs, ls='--', showlegend=False)
 	
 	plt.tight_layout()
 	plt.show()

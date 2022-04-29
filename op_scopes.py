@@ -346,7 +346,7 @@ if __name__ == '__main__':
 	# quick_perv(105400 + np.array([28, 29, 30, 31, 32, 33]))
 	# nbi_ops([105428, 105427], arc_iv=True, nbi_win=[.45, .475])
 	# nbi_ops(105100 + np.array([83, 88, 89]), nbi_win=[.46, .485])
-	nbi_ops([105692, 105729], nbi_win=[.46, .48], arc_iv=False)
+	nbi_ops([105795], nbi_win=[.46, .48], arc_iv=False)
 	'''
 	nbi_ops([104584], arc_iv=True, nbi_win=[.46,.475])
 	nbi_ops([103658, 103617], arc_iv=True)#, nbi_win=[.46, .475])

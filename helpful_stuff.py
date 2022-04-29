@@ -210,7 +210,7 @@ def read_eqdsk(eqdsk, plot=False):
 	bphi_xy = BtR / x_xy
 	bphi_mp = fpol / x
 	
-	rvec_hd, zvec_hd = np.linspace(x[0], x[-1], num=1000.), np.linspace(y[0], y[-1], num=1000)
+	rvec_hd, zvec_hd = np.linspace(x[0], x[-1], num=1000), np.linspace(y[0], y[-1], num=1000)
 	r2dhd, z2dhd = np.meshgrid(rvec_hd, zvec_hd)
 	nz0 = np.where(abs(y) == min(abs(y)))[0][0]
 	br_xy, bz_xy = np.zeros_like(psixy), np.zeros_like(psixy)
@@ -255,6 +255,69 @@ def read_eqdsk(eqdsk, plot=False):
 	# fpol_xy: fpol_xy, rminor_xy: rminor_xy, norm_psixy: norm_psixy, plasma: new_plasma, dpsi: dpsi,
 	# psiaxis: psi_axis}
 	return output
+
+
+def read_eqdsk2(filename):
+
+    def read_1d(fid, j, n):
+        output = np.zeros((n,))
+        for i in range(n):
+            if j == 0:
+                line = fid.readline()
+            output[i] = line[j:j+16]
+            j += 16
+            if j == 16*5:
+                j = 0
+        return output, j
+
+    def read_2d(fid, j, n, m):
+        output = np.zeros((m, n))
+        for k in range(n):
+            for i in range(m):
+                if j == 0:
+                    line = fid.readline()
+                output[i, k] = line[j:j+16]
+                j += 16
+                if j == 16*5:
+                    j = 0
+        return output, j
+    # Read-in data
+    eqdsk_obj = {}
+    with open(filename, 'r') as fid:
+        # Get sizes
+        line = fid.readline()
+        split_line = line.split()
+        eqdsk_obj['nz'] = int(split_line[-1])
+        eqdsk_obj['nr'] = int(split_line[-2])
+        # Read header content
+        line_keys = [['rdim',  'zdim',  'raxis',  'rleft',  'zmid'],
+                     ['raxis', 'zaxis', 'psimax', 'psimin', 'bcentr'],
+                     ['itor',  'skip',  'skip',   'skip',   'skip'],
+                     ['skip',  'skip',  'skip',   'skip',   'skip']]
+        for i in range(4):
+            line = fid.readline()
+            for j in range(5):
+                if line_keys[i][j] == 'skip':
+                    continue
+                line_seg = line[j*16:(j+1)*16]
+                eqdsk_obj[line_keys[i][j]] = float(line_seg)
+        # Read flux profiles
+        j = 0
+        keys = ['fpol', 'pres', 'ffprime', 'pprime']
+        for key in keys:
+            eqdsk_obj[key], j = read_1d(fid, j, eqdsk_obj['nr'])
+        # Read PSI grid
+        eqdsk_obj['psirz'], j = read_2d(fid, j, eqdsk_obj['nz'],
+                                        eqdsk_obj['nr'])
+        # Read q-profile
+        eqdsk_obj['qpsi'], j = read_1d(fid, j, eqdsk_obj['nr'])
+        # Skip line (data already present)
+        line = fid.readline()
+        # Read outer flux surface
+        eqdsk_obj['rzout'], j = read_2d(fid, j, eqdsk_obj['nr'], 2)
+        # Read limiting corners
+        eqdsk_obj['rzlim'], j = read_2d(fid, j, 5, 2)
+    return eqdsk_obj
 
 
 def ltx_limiter():

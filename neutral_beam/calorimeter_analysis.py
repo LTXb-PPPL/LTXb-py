@@ -908,7 +908,7 @@ def perveance_scan_7feb22(plot_vs='fwhm'):
 	beam aligned on calorimeter, plot fwhm vs perveance
 	plot_vs: fwhm, power_frac_to_cal, or efold
 	"""
-	if plot_vs == 'fwhm' or plot_vs == 'efold':
+	if plot_vs.lower() == 'fwhm' or plot_vs.lower() == 'efold':
 		units = ' (mm)'
 	else:
 		units = ''
@@ -927,11 +927,12 @@ def perveance_scan_7feb22(plot_vs='fwhm'):
 			insuff.append(ish)
 		fwhm_arr = np.append(fwhm_arr, fwhm)
 	
+	fs = 14
 	ax1.plot(perv_arr * 1.e6, fwhm_arr, 'o')
-	ax1.plot(perv_arr[insuff] * 1.e6, fwhm_arr[insuff], 'kx')
-	ax1.set_xlabel('perveance (e-6)', fontsize=12)
-	ax1.set_ylabel(f'{plot_vs}{units}', fontsize=12)
-	ax1.tick_params(labelsize=12)
+	# ax1.plot(perv_arr[insuff] * 1.e6, fwhm_arr[insuff], 'kx')
+	ax1.set_xlabel('perveance ($\\times 10^{-6}$)', fontsize=fs)
+	ax1.set_ylabel(f'{plot_vs}{units}', fontsize=fs)
+	ax1.tick_params(labelsize=fs)
 	plt.tight_layout()
 
 	
@@ -1188,11 +1189,11 @@ def cal_gauss_fit(shot, ret='fwhm'):
 	sig = np.mean(sig_arr)
 	fwhm = 2 * np.sqrt(2 * np.log(2)) * sig
 	power_frac_to_cal = gauss2d_integral(nsig=r_edge / sig)
-	if ret == 'fwhm':
+	if ret.lower() == 'fwhm':
 		return fwhm, sufficient_neut
-	elif ret == 'power_frac_to_cal':
+	elif ret.lower() == 'power_frac_to_cal':
 		return power_frac_to_cal, sufficient_neut
-	elif ret == 'efold':
+	elif ret.lower() == 'efold':
 		return np.sqrt(2)*sig, sufficient_neut
 
 
@@ -1243,30 +1244,6 @@ def neutralization_scan_7feb22():
 	ax1.set_ylabel('meas/pred power fraction')
 	ax2.set_ylabel('extra $\Delta T$ on upper')
 	plt.tight_layout()
-
-
-def compare_thermocouple_sigs_to_russian_trace():
-	bestshot = 105124  # run section below to set bestshot
-	# sh1 = 105100 + np.array(
-	# 	[24, 27, 31, 32, 35, 45, 47, 48, 49, 50, 51, 52, 53, 54, 55, 57, 58, 59, 61, 62, 63, 64, 65, 67, 68, 69, 71, 73,
-	# 	 74, 75, 76])
-	# max_dt, bestshot = -1, -1
-	# dt_arr = []
-	# for shot in sh1:
-	# 	t, c0, c1, c2, c3, c4 = cal_temp_sigs(shot, calonly=True)
-	# 	dt_arr.append(max(c0))
-	# 	if max(c0) > max_dt:
-	# 		max_dt = max(c0)
-	# 		bestshot = shot
-	# print(f'best shot is {bestshot} with dt={max_dt}')
-	t, c0, c1, c2, c3, c4 = cal_temp_sigs(bestshot, calonly=True)
-	for c in [c0, c1, c2, c3, c4]:
-		plt.plot(t, c)
-	plt.xlabel('time [s]')
-	plt.ylabel('temp [degC]')
-	plt.tight_layout()
-	plt.xlim(-5, 30)
-	plt.grid()
 
 
 def perveance_scan_28feb22():
@@ -1369,9 +1346,8 @@ if __name__ == '__main__':
 	# calorimeter_current_scan_29mar22()
 	
 	# compare_neutralizer_onoff()
-	perveance_scan_7feb22(plot_vs='efold')
+	perveance_scan_7feb22(plot_vs='fwhm')
 	# perveance_scan_28feb22()
-	# compare_thermocouple_sigs_to_russian_trace()
 	# neutralization_scan_7feb22()
 	# realigned_beam_4feb22()
 	# gauss2d_integral(2, inspect=True)
