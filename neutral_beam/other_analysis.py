@@ -13,6 +13,9 @@ from scipy.io import loadmat
 
 
 def rmag_v_rlcfs(rescan=True, ploteach=False):
+	nel = 1.e19  # num/m^3*L
+	ebeam = 17000.  # eV of beam
+	
 	# look through equilibria, plot r_mag vs r_lcfs with eq identification (plotly?)
 	# then we can analyze eq with same r_mag and diff r_lcfs and vice versa to interrogate coupling dependencies
 	# look at stuff in ltx_beambot if you only want eqs during NBI for some reason
@@ -50,15 +53,19 @@ def rmag_v_rlcfs(rescan=True, ploteach=False):
 		eqdsks = np.array(dat['eqdsks'])
 	
 	tol = .001  # 1 cm
+	# scan 1
 	rmagchoice = .4
 	rlcfschoice = .57
+	# scan 2
+	# rmagchoice = .388
+	# rlcfschoice = .594
 	irmag = np.where(abs(rmag - rmagchoice) < tol)[0]
 	irlcfs = np.where(abs(rlcfs - rlcfschoice) < tol)[0]
 	print(f'found {len(irmag)} pts within {tol} of rmag')
 	print(f'found {len(irlcfs)} pts within {tol} of rlcfs')
 	
 	fig, ax = plt.subplots()
-	ax.plot(rlcfs, rmag, 'o', zorder=1)
+	ax.plot(rlcfs, rmag, 'o', zorder=1, markersize=2)
 	ax.fill_between(ax.get_xlim(), [rmagchoice - tol, rmagchoice - tol], [rmagchoice + tol, rmagchoice + tol],
 	                facecolor='k', alpha=.25, zorder=2)
 	yl = ax.get_ylim()
@@ -68,57 +75,145 @@ def rmag_v_rlcfs(rescan=True, ploteach=False):
 	ax.set_xlabel('$r_{lcfs}$')
 	ax.set_ylabel('$r_{mag}$')
 	
-	fig2, (ax1, ax2) = plt.subplots(ncols=2, sharey=True)
+	fig2, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(nrows=2, ncols=3, sharey='row')  # sharex='col',
+	
 	eqs = eqdsks[irmag]
 	rlcfs_pts = rlcfs[irmag]
 	runnums = [int(eq.split('_')[-1].split('.')[0]) for eq in eqs]
 	shots = [int(eq.split('_')[-2]) for eq in eqs]
-	shine, prompt, coup = [], [], []
-	for sh, rn, eq in zip(shots, runnums, eqs):
-		matfile = f'Z:/matlab/botdata/{sh}_{rn:02}.mat'
-		if not os.path.exists(matfile):
-			conbeam_tools.create_map(eq, sh, rn)
-		try:
-			matdat = loadmat(matfile)
-			shine.append(matdat['shinethru'][0][0])
-			prompt.append(matdat['prompt_loss'][0][0])
-			coup.append(matdat['coupled'][0][0])
-		except FileNotFoundError:
-			shine.append(np.nan)
-			prompt.append(np.nan)
-			coup.append(np.nan)
-	ax1.plot(rlcfs_pts, shine, label='shinethrough')
-	ax1.plot(rlcfs_pts, prompt, label='prompt loss')
-	ax1.plot(rlcfs_pts, coup, label='coupled')
+	shine, prompt, coup, ropt = [], [], [], []
+	for ii, (sh, rn, eq) in enumerate(zip(shots, runnums, eqs)):
+		print(f'#{ii}/{len(shots)} :: {eq}')
+		matfile = f'Z:/matlab/botdata/{sh}_{rn:02}.json'
+		domap = 0
+		if os.path.exists(matfile):
+			with open(matfile, 'r') as read_content:
+				matdat = json.load(read_content)
+			if 'Ebeam' not in matdat.keys():
+				domap = 1
+			elif not ebeam in np.array(matdat['Ebeam']):  # need to add this ebeam to file
+				domap = 1
+		else:
+			domap = 1
+		if domap:
+			conbeam_tools.create_map(eq, sh, rn, ebeam, nel)  # will check internally if run eq/ebeam combo already
+		with open(matfile, 'r') as read_content:
+			matdat = json.load(read_content)
+		if isinstance(matdat['shinethru'], list):
+			ienergy = np.where(np.array(matdat['Ebeam']) == ebeam)[0][0]
+			shine.append(matdat['shinethru'][ienergy])
+			prompt.append(matdat['prompt_loss'][ienergy])
+			coup.append(matdat['coup_frac'][ienergy])
+			ropt.append(matdat['rOpt'][ienergy])
+		else:  # only one entry so far
+			shine.append(matdat['shinethru'])
+			prompt.append(matdat['prompt_loss'])
+			coup.append(matdat['coup_frac'])
+			ropt.append(matdat['rOpt'])
+	shine = np.array([np.nan if v is None else v for v in shine])
+	prompt = np.array([np.nan if v is None else v for v in prompt])
+	coup = np.array([np.nan if v is None else v for v in coup])
+	ropt = np.array([np.nan if v is None else v for v in ropt])
+	noignore = np.where((np.array(coup) > .01)& (abs(ropt-.5) < .075))
+	ax1.plot(rlcfs_pts[noignore], shine[noignore], 'o', label='shinethrough')
+	ax1.plot(rlcfs_pts[noignore], prompt[noignore], 'o', label='prompt loss')
+	ax1.plot(rlcfs_pts[noignore], coup[noignore], 'o', label='coupled')
 	ax1.set_title(f'rmag = {rmagchoice}+/-{tol}')
-
+	ax4.plot(rlcfs_pts[noignore], ropt[noignore], 'ko')
+	
 	eqs = eqdsks[irlcfs]
 	rmag_pts = rmag[irlcfs]
 	runnums = [int(eq.split('_')[-1].split('.')[0]) for eq in eqs]
 	shots = [int(eq.split('_')[-2]) for eq in eqs]
-	shine, prompt, coup = [], [], []
-	for sh, rn, eq in zip(shots, runnums, eqs):
-		matfile = f'Z:/matlab/botdata/{sh}_{rn:02}.mat'
-		if not os.path.exists(matfile):
-			conbeam_tools.create_map(eq, sh, rn)
-		try:
-			matdat = loadmat(matfile)
-			shine.append(matdat['shinethru'][0][0])
-			prompt.append(matdat['prompt_loss'][0][0])
-			coup.append(matdat['coupled'][0][0])
-		except FileNotFoundError:
-			shine.append(np.nan)
-			prompt.append(np.nan)
-			coup.append(np.nan)
-	ax2.plot(rmag_pts, shine, label='shinethrough')
-	ax2.plot(rmag_pts, prompt, label='prompt loss')
-	ax2.plot(rmag_pts, coup, label='coupled')
+	shine, prompt, coup, ropt = [], [], [], []
+	for ii, (sh, rn, eq) in enumerate(zip(shots, runnums, eqs)):
+		print(f'#{ii}/{len(shots)} :: {eq}')
+		matfile = f'Z:/matlab/botdata/{sh}_{rn:02}.json'
+		domap = 0
+		if os.path.exists(matfile):
+			with open(matfile, 'r') as read_content:
+				matdat = json.load(read_content)
+			if not ebeam in np.array(matdat['Ebeam']):  # need to add this ebeam to file
+				domap = 1
+		else:
+			domap = 1
+		if domap:
+			conbeam_tools.create_map(eq, sh, rn, ebeam, nel)  # will check internally if run eq/ebeam combo already
+		with open(matfile, 'r') as read_content:
+			matdat = json.load(read_content)
+		if isinstance(matdat['shinethru'], list):
+			ienergy = np.where(np.array(matdat['Ebeam']) == ebeam)[0][0]
+			shine.append(matdat['shinethru'][ienergy])
+			prompt.append(matdat['prompt_loss'][ienergy])
+			coup.append(matdat['coup_frac'][ienergy])
+			ropt.append(matdat['rOpt'][ienergy])
+		else:  # only one entry so far
+			shine.append(matdat['shinethru'])
+			prompt.append(matdat['prompt_loss'])
+			coup.append(matdat['coup_frac'])
+			ropt.append(matdat['rOpt'])
+	shine = np.array([np.nan if v is None else v for v in shine])
+	prompt = np.array([np.nan if v is None else v for v in prompt])
+	coup = np.array([np.nan if v is None else v for v in coup])
+	ropt = np.array([np.nan if v is None else v for v in ropt])
+	noignore = np.where((np.array(coup) > .01)& (abs(ropt-.5) < .075))
+	ax2.plot(rmag_pts[noignore], shine[noignore], 'o', label='shinethrough')
+	ax2.plot(rmag_pts[noignore], prompt[noignore], 'o', label='prompt loss')
+	ax2.plot(rmag_pts[noignore], coup[noignore], 'o', label='coupled')
 	ax2.set_title(f'rlcfs = {rlcfschoice}+/-{tol}')
-
-	ax1.legend()
-	ax1.set_xlabel('$R_{lcfs}$ (m)')
+	ax5.plot(rmag_pts[noignore], ropt[noignore], 'ko')
+	
+	eqs = np.unique(np.append(eqdsks[irmag], eqdsks[irlcfs]))
+	runnums = [int(eq.split('_')[-1].split('.')[0]) for eq in eqs]
+	shots = [int(eq.split('_')[-2]) for eq in eqs]
+	shine, prompt, coup, ropt = [], [], [], []
+	for ii, (sh, rn, eq) in enumerate(zip(shots, runnums, eqs)):
+		print(f'#{ii}/{len(shots)} :: {eq}')
+		matfile = f'Z:/matlab/botdata/{sh}_{rn:02}.json'
+		domap = 0
+		if os.path.exists(matfile):
+			with open(matfile, 'r') as read_content:
+				matdat = json.load(read_content)
+			if not ebeam in np.array(matdat['Ebeam']):  # need to add this ebeam to file
+				domap = 1
+		else:
+			domap = 1
+		if domap:
+			conbeam_tools.create_map(eq, sh, rn, ebeam, nel)  # will check internally if run eq/ebeam combo already
+		with open(matfile, 'r') as read_content:
+			matdat = json.load(read_content)
+		if isinstance(matdat['shinethru'], list):
+			ienergy = np.where(np.array(matdat['Ebeam']) == ebeam)[0][0]
+			shine.append(matdat['shinethru'][ienergy])
+			prompt.append(matdat['prompt_loss'][ienergy])
+			coup.append(matdat['coup_frac'][ienergy])
+			ropt.append(matdat['rOpt'][ienergy])
+		else:  # only one entry so far
+			shine.append(matdat['shinethru'])
+			prompt.append(matdat['prompt_loss'])
+			coup.append(matdat['coup_frac'])
+			ropt.append(matdat['rOpt'])
+	shine = np.array([np.nan if v is None else v for v in shine])
+	prompt = np.array([np.nan if v is None else v for v in prompt])
+	coup = np.array([np.nan if v is None else v for v in coup])
+	ropt = np.array([np.nan if v is None else v for v in ropt])
+	noignore = np.where((np.array(coup) > .01) & (abs(ropt-.5) < .075))
+	ax3.plot(ropt[noignore], shine[noignore], 'o', label='shinethrough')
+	ax3.plot(ropt[noignore], prompt[noignore], 'o', label='prompt loss')
+	ax3.plot(ropt[noignore], coup[noignore], 'o', label='coupled')
+	
+	ax4.set_xlabel('$R_{lcfs}$ (m)')
 	ax1.set_ylabel('beam fraction')
-	ax2.set_xlabel('$R_{mag}$ (m)')
+	ax4.set_ylabel('$R_{Opt}$ (m)')
+	ax5.set_xlabel('$R_{mag}$ (m)')
+	# ax4.set_ylabel('$R_{Opt}$ (m)')
+	ax3.set_xlabel('$R_{Opt}$ (m)')
+	
+	ax6.plot(np.nan, np.nan, 'o', label='shinethrough')
+	ax6.plot(np.nan, np.nan, 'o', label='prompt loss')
+	ax6.plot(np.nan, np.nan, 'o', label='coupled')
+	ax6.legend()
+	ax6.axis('off')
 	plt.tight_layout()
 	
 	plt.show()

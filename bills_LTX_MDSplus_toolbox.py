@@ -99,82 +99,66 @@ def get_transp_tree_conn(temp_shot, treename='transp_ltx'):
 
 
 def get_data(mytree, node, t_start=None, t_end=None, times=None):
-	'''
-	Based on "read_data" from hbtep.misc (by Nikolaus Rath) but accesses MDSPlus tree remotely; differences are very small, including branch to account for remote vs local use.
-	Arguments:
-		<mytree>: MDSPlus tree instance (class 'MDSplus.tree.Tree')
-		<node>: MDSPlus node pointer/name from which to read (string)
-	Optional Arguments: if none of the following is used, data is returned without a timebase
-		<t_start>: time IN SECONDS according to node's timebase, from which to start reading data; usually used together with <t_end> (float)
-		<t_end>: time IN SECONDS according to node's timebase, at which to stop reading data; usually used together with <t_start> (float)
-		<times>: range of times IN SECONDS, according to node's timebase, at which to read data; overrides <t_start> and <t_end> (iterable of float)
-	Returns:  format depends on timebase arguments...  if no timebase arguments are used, only <data> is returned; else (<mytimes>, <data>) is returned
-		<data>: vector of data values from node at requested time range or time points, or all points if not specified (array of float)
-		<mytimes>: vector of time values IN SECONDS from node timebase at requested time range or time points, only returned if timebase arguments are used (array of float)
-	'''
-	# print('>>> DIAGNOSTIC: Getting data from'+temp_node)
-	#	if runfromhome:
-	#		return get_data_fromhome(temp_tree,temp_node,t_start,t_end,times)
-	#	else:
-	#		return get_data_fromlab(temp_tree, temp_node, t_start, t_end, times)
-	
-	if runfromhome:
-		rawdata = mytree.get(node).data()
-	else:
-		mydatarec = mytree.getNode(node).record
-		rawdata = mydatarec.data()
-	
-	#	print( mytree,max(data),min(data) )
-	
-	if type(rawdata) == type(array(list())):
-		if runfromhome:
-			mytimes = mytree.get('dim_of(' + node + ')').data()
-			rawdata = mytree.get(node).data()
-		# print(mytimes,data)
-		else:
-			mytimes = mydatarec.dim_of().data()
-			rawdata = mydatarec.data()
-		# print(mean(data),data)
-		# print(mytimes)
-		# print(type(mytimes),type(data))
-		start_idx = 0
-		stop_idx = len(mytimes)
-		if t_start is not None:
-			start_idx = abs(mytimes - t_start).argsort()[0]
-		if t_end is not None:
-			stop_idx = abs(mytimes - t_end).argsort()[0]
-		# print('test4')
-		
-		if times is None:
-			# print(len(mytimes),len(data),start_idx,stop_idx)
-			# print(len(mytimes[start_idx:stop_idx]),len(data[start_idx:stop_idx]),stop_idx-start_idx)
-			return array(mytimes[start_idx:stop_idx]), array(rawdata[start_idx:stop_idx])
-		else:
-			idx1 = abs((mytimes - times[0])).argsort()[0]
-			idx2 = abs((mytimes - times[-1])).argsort()[0] + 1
-			if idx2 - idx1 == len(times) and allclose(mytimes[idx1:idx2], times):
-				data = rawdata[idx1:idx2]
-			elif min(times) >= min(mytimes) and max(times) <= max(mytimes):
-				data = interp1d(mytimes, rawdata)(times)
-				return array(data[start_idx:stop_idx])
-			else:
-				data = zeros(len(times))  # *NaN
-				try:
-					subtimes = (times[times >= mytimes[0]])[times[times >= mytimes[0]] <= mytimes[-1]]
-				except:
-					print(sys.exc_info())
-					print(shape(times), shape(mytimes))
-					print(min(times), min(mytimes), max(times), max(mytimes))
-					print(shape(times[mytimes[0] >= times]))
-				st_idx1 = (where(times >= mytimes[0]))[0][0]
-				st_idx2 = (where(times <= mytimes[-1]))[0][-1]
-				print(min(subtimes), min(mytimes), max(subtimes), max(mytimes))
-				interpdata = interp1d(mytimes, rawdata)(subtimes)
-				data[st_idx1:st_idx2 + 1] = interpdata
-				return array(data)
-	else:
-		return rawdata
 
+	try:
+		if runfromhome:
+			rawdata = mytree.get(node).data()
+		else:
+			mydatarec = mytree.getNode(node).record
+			rawdata = mydatarec.data()
+		
+		if type(rawdata) == type(array(list())):
+			if runfromhome:
+				mytimes = mytree.get('dim_of(' + node + ')').data()
+				rawdata = mytree.get(node).data()
+			# print(mytimes,data)
+			else:
+				mytimes = mydatarec.dim_of().data()
+				rawdata = mydatarec.data()
+			# print(mean(data),data)
+			# print(mytimes)
+			# print(type(mytimes),type(data))
+			start_idx = 0
+			stop_idx = len(mytimes)
+			if t_start is not None:
+				start_idx = abs(mytimes - t_start).argsort()[0]
+			if t_end is not None:
+				stop_idx = abs(mytimes - t_end).argsort()[0]
+			# print('test4')
+			
+			if times is None:
+				# print(len(mytimes),len(data),start_idx,stop_idx)
+				# print(len(mytimes[start_idx:stop_idx]),len(data[start_idx:stop_idx]),stop_idx-start_idx)
+				return array(mytimes[start_idx:stop_idx]), array(rawdata[start_idx:stop_idx])
+			else:
+				idx1 = abs((mytimes - times[0])).argsort()[0]
+				idx2 = abs((mytimes - times[-1])).argsort()[0] + 1
+				if idx2 - idx1 == len(times) and allclose(mytimes[idx1:idx2], times):
+					data = rawdata[idx1:idx2]
+				elif min(times) >= min(mytimes) and max(times) <= max(mytimes):
+					data = interp1d(mytimes, rawdata)(times)
+					return array(data[start_idx:stop_idx])
+				else:
+					data = zeros(len(times))  # *NaN
+					try:
+						subtimes = (times[times >= mytimes[0]])[times[times >= mytimes[0]] <= mytimes[-1]]
+					except:
+						print(sys.exc_info())
+						print(shape(times), shape(mytimes))
+						print(min(times), min(mytimes), max(times), max(mytimes))
+						print(shape(times[mytimes[0] >= times]))
+					st_idx1 = (where(times >= mytimes[0]))[0][0]
+					st_idx2 = (where(times <= mytimes[-1]))[0][-1]
+					print(min(subtimes), min(mytimes), max(subtimes), max(mytimes))
+					interpdata = interp1d(mytimes, rawdata)(subtimes)
+					data[st_idx1:st_idx2 + 1] = interpdata
+					return array(data)
+		else:
+			return rawdata
+	except:
+		print(f'problem occurred retrieving data for node {node}')
+		return (np.array([np.nan]), np.array([np.nan]))
+	
 
 def get_nodedata(temp_node, temp_shot, temp_tStart=None, temp_tStop=None, temp_times=None):
 	'''

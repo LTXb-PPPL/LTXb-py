@@ -1,4 +1,6 @@
+import io
 import os
+import stat
 import warnings
 
 import matplotlib.pyplot as plt
@@ -56,21 +58,85 @@ def update_trdat(files, updict=None, comment=[], uncomment=[], remove=[]):
 
 def create_new(copyfrom=None, newnames=None, setdict=None):
 	filelist = [copyfrom[:-9] + nn + 'TR.DAT' for nn in newnames]
-	for i, file in enumerate(filelist):
+	go = 1
+	for file in filelist:
 		if os.path.exists(file):
 			yn, go = '', 0
-			while yn != 'y' and yn != 'n':
-				yn = input(f'file {file} already exists, OVERWRITE? (y/n)')
-			if yn == 'y':
-				go = 1
-		else:
+			print(f'file {file} already exists')
+	if not go:
+		while yn != 'y' and yn != 'n':
+			yn = input('OVERWRITE ALL? (y/n)')
+		if yn == 'y':
 			go = 1
-		if go == 1:
+	if go:
+		for i, file in enumerate(filelist):
 			copy_content(copyfrom, file)  # create new files copied from [copyfrom]
 			update = {}
 			for k, v in setdict.items():
 				update[k] = v[i]
 			update_trdat([file], updict=update)
+	write_sh_file2(filelist)
+
+
+def write_sh_file(filelist):
+	nums = [int(fn[-8:-6]) for fn in filelist]
+	if not np.unique([nums[i + 1] - nums[i] for i in np.arange(len(nums) - 1)])[0] == 1:
+		print('non-sequential TR.DAT filenames found, write your own shell script. returning...')
+		return
+	else:
+		dir = '/'.join(filelist[0].split('/')[:-1])
+		tofile = f'{dir}/run_transp_submissions.sh'
+		nprocs = np.floor(256 / len(filelist))
+		shotletter = filelist[0].split('/')[-1][-15:-8]
+		content = f'#!/bin/sh\n#created by robot to run TR.DAT files\n' \
+		          f'echo "256 core user limit, only submit using <={int(nprocs)} CORES"\n' \
+		          f'for i in $(seq -f "%02g" {min(nums)} {max(nums)})\ndo\n' \
+		          '	echo " "\n	echo " "\n	echo " "\n' \
+		          f'	echo "starting {shotletter}$i"\n' \
+		          f'	tr_start {shotletter}$i\n' \
+		          f'	echo "submitting {shotletter}$i"\n' \
+		          f'	tr_send {shotletter}$i\n' \
+		          'done\necho " "\necho " "\necho " "\n' \
+		          'echo "SUBMISSION COMPLETE"'
+		writeto = io.open(tofile, 'w', newline='\n')
+		writeto.write(content)
+		writeto.close()
+		os.chmod(tofile, stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+		# os.chmod(tofile, 0o777)
+		print(f'wrote file: {tofile}')
+
+
+def write_sh_file2(filelist):
+	nums = [int(fn[-8:-6]) for fn in filelist]
+	if not np.unique([nums[i + 1] - nums[i] for i in np.arange(len(nums) - 1)])[0] == 1:
+		print('non-sequential TR.DAT filenames found, write your own shell script. returning...')
+		return
+	else:
+		dir = '/'.join(filelist[0].split('/')[:-1])
+		tofile = f'{dir}/run_transp_submissions.sh'
+		nprocs = np.floor(256 / len(filelist))
+		shotletter = filelist[0].split('/')[-1][-15:-8]
+		
+		content = f'#!/usr/bin/expect --\n#created by robot to run TR.DAT files\n' \
+		          f'echo "256 core user limit, only submit using <={int(nprocs)} CORES"\n' \
+		          f'for i in $(seq -f "%02g" {min(nums)} {max(nums)})\ndo\n' \
+		          '	echo " "\n	echo " "\n	echo " "\n' \
+		          f'	echo "starting {shotletter}$i"\n' \
+		          f'	spawn tr_start {shotletter}$i\n' \
+		          '	expect "tokyy_id"\n	send "ltx\r"\n	expect "tokYY_id"\n	send "y\r"\n' \
+		          '	expect "Enter Comments for TR.INF File:"\n	send "x\r"\n' \
+		          '	expect "verify your email address = wcapecch@pppl.gov (Y/N):"\n	send "y\r"\n' \
+		          '	expect eof\n' \
+		          f'	echo "submitting {shotletter}$i"\n' \
+		          f'	tr_send {shotletter}$i\n' \
+		          'done\necho " "\necho " "\necho " "\n' \
+		          'echo "SUBMISSION COMPLETE"'
+		writeto = io.open(tofile, 'w', newline='\n')
+		writeto.write(content)
+		writeto.close()
+		os.chmod(tofile, stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+		# os.chmod(tofile, 0o777)
+		print(f'wrote file: {tofile}')
 
 
 def ip_n0_eb_scan(cleancopy=False):
@@ -136,21 +202,15 @@ def ip_n0_eb_scan(cleancopy=False):
 
 
 if __name__ == '__main__':
-	
-	# FOCLR = 180.        ! focal lengths DE '**R' is horizontal focal length
-	# FOCLZ = 180.        !DE this is the vertical focal length
-	# DIVR = .02          ! divergences DE this is the horizontal divergence in radians
-	# DIVZ = .02
-	
 	# focal length scan (180 nominal). range 160, 165, ... 200
-	foc = [str(f) for f in np.linspace(160, 200, endpoint=True, num=9)]
-	create_new('Z:/transp/t103617/103617C01TR.DAT', [f'F{i:02}' for i in np.arange(1, 10)],
-	           {'FOCLR': foc, 'FOCLZ': foc})
+	# foc = [str(f) for f in np.linspace(160, 200, endpoint=True, num=9)]
+	# create_new('Z:/transp/t103617/103617C01TR.DAT', [f'F{i:02}' for i in np.arange(1, 10)],
+	#            {'FOCLR': foc, 'FOCLZ': foc})
 	
 	# divergence scan (.02 nominal) range .02,.03, ... .10
-	div = [str(d) for d in np.linspace(.02, .1, endpoint=True, num=9)]
-	create_new('Z:/transp/t103617/103617C01TR.DAT', [f'D{i:02}' for i in np.arange(1, 10)], {'DIVR': div, 'DIVZ': div})
-	a = 1
+	# div = [str(d) for d in np.linspace(.02, .1, endpoint=True, num=9)]
+	# create_new('Z:/transp/t103617/103617C01TR.DAT', [f'D{i:02}' for i in np.arange(1, 10)], {'DIVR': div, 'DIVZ': div})
+	# a = 1
 	
 	# create_new('Z:/transp/t103617/103617C01TR.DAT',
 	#            ['V01', 'V02', 'V03', 'V04', 'V05', 'V06', 'V07', 'V08', 'V09', 'V10', 'V11'], {
@@ -160,20 +220,27 @@ if __name__ == '__main__':
 	#            ['N01', 'N02', 'N03', 'N04', 'N05', 'N06', 'N07', 'N08', 'N09', 'N10', 'N11'], {
 	# 	           'DN0OUT': ['1.e8', '5.e8', '1.e9', '5.e9', '1.e10', '5.e10', '1.e11', '5.e11', '1.e12', '5.e12',
 	# 	                      '1.e13']})
-	perv = 15.e-6
-	vb = np.arange(10, 21) * 1000.  # 10-20kV
-	ib = perv * vb ** 1.5  # A
-	pb = ib * vb  # W
-	vbarr = [f'{v:1.1e}' for v in vb]
-	pbarr = [f'{p:1.1e}' for p in pb]
-	newnames = [f'P{i:02}' for i in np.arange(1, 12)]
-	create_new('Z:/transp/t103617/103617C01TR.DAT', newnames, {'EINJA(1)': vbarr, 'PINJA(1)': pbarr})
+	# perv = 15.e-6
+	# vb = np.arange(10, 21) * 1000.  # 10-20kV
+	# ib = perv * vb ** 1.5  # A
+	# pb = ib * vb  # W
+	# vbarr = [f'{v:1.1e}' for v in vb]
+	# pbarr = [f'{p:1.1e}' for p in pb]
+	# newnames = [f'P{i:02}' for i in np.arange(1, 12)]
+	# create_new('Z:/transp/t103617/103617C01TR.DAT', newnames, {'EINJA(1)': vbarr, 'PINJA(1)': pbarr})
 	
 	a = 1
 	# ip_n0_eb_scan(cleancopy=True)
 	
-	fix_stuff_with_current_density_energy_scan = False
-	if fix_stuff_with_current_density_energy_scan:
-		files = [f'Z:/transp/t100002/100002D{str(i).zfill(2)}TR.dat' for i in np.arange(15) + 1]
-		update = {'EINJA(1)': '1.6d4'}
-		update_trdat(files, updict=update)
+	# fix_stuff_with_current_density_energy_scan = False
+	# if fix_stuff_with_current_density_energy_scan:
+	# 	files = [f'Z:/transp/t100002/100002D{str(i).zfill(2)}TR.dat' for i in np.arange(15) + 1]
+	# 	update = {'EINJA(1)': '1.6d4'}
+	# 	update_trdat(files, updict=update)
+	
+	# create tangency scans for 105795C02 and 105952C02
+	rtans = [18.0, 20.0, 22., 24., 26., 28., 30., 32., 34., 36., 38., 40.]
+	# create_new('Z:/transp/t105795/105795C02TR.DAT', [f'T{i + 1:02}' for i in np.arange(len(rtans))],
+	#            {'RTCENA(1)': [f'{rt}' for rt in rtans]})
+	create_new('Z:/transp/t105952/105952C02TR.DAT', [f'T{i + 1:02}' for i in np.arange(len(rtans))],
+	           {'RTCENA(1)': [f'{rt}' for rt in rtans]})

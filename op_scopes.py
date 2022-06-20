@@ -36,15 +36,66 @@ def avg_density_during_beam(shot):
 		return np.nan
 
 
+def plot_nbi_rawdata(shots):
+	fig, axs = plt.subplots(nrows=4, ncols=2, sharex=True)
+	((ax1, ax5), (ax2, ax6), (ax3, ax7), (ax4, ax8)) = axs
+	ax1r, ax2r, ax3r, ax4r = ax5.twinx(), ax6.twinx(), ax7.twinx(), ax8.twinx()
+	for ax in [ax5, ax6, ax7, ax8]:
+		ax.yaxis.set_visible(False)
+	ax1.set_ylabel('$V_{arc}$ (V)')
+	ax1r.set_ylabel('$I_{arc}$ (A)')
+	ax2.set_ylabel('$V_{HVPS}$ (V)')
+	ax2r.set_ylabel('$I_{HVPS}$ (A)')
+	ax3.set_ylabel('$V_{2Grid}$ (V)')
+	ax3r.set_ylabel('$I_{2Grid}$ (A)')
+	ax4.set_ylabel('$I_{beam}$ (A)')
+	ax4r.set_ylabel('$I_{MIPS}$ (A)')
+	ax4.set_xlabel('t (ms)')
+	ax8.set_xlabel('t (ms)')
+	for axrow in axs:
+		for ax in axrow:
+			ax.grid()
+	for sh in shots:
+		try:
+			t = get_tree_conn(sh, treename='ltx_nbi')
+			print('gathering data for shot {} occurred on {}'.format(sh, get_data(t, '.metadata:timestamp')))
+			(tiarc, iarc) = get_data(t, '.source_diags.i_arc')
+			(tarc, varc) = get_data(t, '.source_diags.v_arc')
+			ax1.plot(tarc * 1.e3, varc, label=sh)
+			ax1r.plot(tiarc * 1.e3, iarc)
+			(tibeam, ibeam) = get_data(t, '.source_diags.i_hvps')
+			(tbeam, vbeam) = get_data(t, '.source_diags.v_hvps')
+			ax2.plot(tbeam * 1.e3, vbeam)
+			ax2r.plot(tibeam * 1.e3, ibeam)
+			(tv2gr, v2gr) = get_data(t, '.source_diags.v_decel_grid')
+			(ti2gr, i2gr) = get_data(t, '.source_diags.i_decel_grid')
+			ax3.plot(tv2gr * 1.e3, v2gr)
+			ax3r.plot(ti2gr * 1.e3, i2gr)
+			(timips, imips) = get_data(t, '.source_diags.i_mag_insul')
+			(tiacc, iacc) = get_data(t, '.source_diags.i_accel_grid')
+			ax4.plot(tiacc * 1.e3, iacc)
+			ax4r.plot(timips * 1.e3, imips)
+		except:
+			print(f'problem encountered processing shot {sh}')
+	ax1.legend()
+	plt.tight_layout()
+	plt.show()
+
+
 def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
 	if arc_iv:
-		fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6), (ax7, ax8)) = plt.subplots(nrows=4, ncols=2, sharex=True)
+		fig, axs = plt.subplots(nrows=4, ncols=2, sharex=True)
+		((ax1, ax2), (ax3, ax4), (ax5, ax6), (ax7, ax8)) = axs
 		ax4r = ax4.twinx()
 		ax4.yaxis.set_visible(False)
 		ax3.set_ylabel('i_arc (A)')
 		ax4r.set_ylabel('v_arc (V)')
 	else:
-		fig, ((ax1, ax2), (ax5, ax6), (ax7, ax8)) = plt.subplots(nrows=3, ncols=2, sharex=True)
+		fig, axs = plt.subplots(nrows=3, ncols=2, sharex=True)
+		((ax1, ax2), (ax5, ax6), (ax7, ax8)) = axs
+	for axrow in axs:
+		for ax in axrow:
+			ax.grid()
 	ax2r = ax2.twinx()
 	ax6r = ax6.twinx()
 	ax8r = ax8.twinx()
@@ -70,52 +121,56 @@ def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
 		else:
 			tree = 'ltx_b'
 			nbi_only = False
-			prefix = '.oper_diags'
-		try:
-			t = get_tree_conn(sh, treename=tree)
-			print('gathering data for shot {} occurred on {}'.format(sh, get_data(t, '.metadata:timestamp')))
-			if not nbi_only and is_nbi_shot(sh, t):
-				(times, ip) = get_data(t, '.diagnostics.magnetic.ip_rog')
-				(times2, ne) = get_data(t, '.diagnostics.microwave.interferom.phase_comp.ne_l')  # [m^-2]
-				ne = smooth(ne)
-				if nbi_win is not None:
-					twin1, twin2 = nbi_win[0], nbi_win[1]
-				else:
-					twin1, twin2 = min(times), max(times)
-				ii = np.where((times >= twin1) & (times <= twin2))
-				i2 = np.where((times2 >= twin1) & (times2 <= twin2))
-				ax1.plot(times[ii], -ip[ii] / 1000., label=sh)
-				ax2r.plot(times2[i2], ne[i2])
-				(tibeam, ibeam) = get_data(t, '{}.ltx_nbi.source_diags.i_hvps'.format(prefix))
-				(tbeam, vbeam) = get_data(t, '{}.ltx_nbi.source_diags.v_hvps'.format(prefix))
-				ibeam = np.interp(tbeam, tibeam, ibeam)
-				(tiarc, iarc) = get_data(t, '{}.ltx_nbi.source_diags.i_arc'.format(prefix))
-				(tarc, varc) = get_data(t, '{}.ltx_nbi.source_diags.v_arc'.format(prefix))
-				iarc = np.interp(tarc, tiarc, iarc)
-				perv = np.zeros_like(ibeam)
-				perv[:] = np.nan
-				t_beamon = np.where(vbeam >= v_thresh)  # only look at where beam is above 5kV
-				pad = 0.25e-3  # remove this amt from beginning/end of beam
-				t_window = np.where((tbeam >= tbeam[t_beamon[0][0]] + pad) & (tbeam <= tbeam[t_beamon[0][-1]] - pad))
-				perv[t_window] = ibeam[t_window] / vbeam[t_window] ** 1.5 * 1.e6  # uPerv
-			# perv = ibeam / vbeam ** 1.5 * 1.e6  # uPerv
-			# perv[np.where(vbeam <= v_thresh)] = np.nan
-			else:
-				tbeam, ibeam, vbeam, tarc, iarc, varc, perv = np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
-			pbeam = ibeam * vbeam / 1000.  # kW
-			iav = np.where(vbeam > v_thresh)
-			vav = (vav * w + np.mean(vbeam[iav])) / (w + 1)
-			pav = (pav * w + np.mean(pbeam[iav])) / (w + 1)
-			w += 1
-			if arc_iv:
-				ax3.plot(tarc, iarc)
-				ax4r.plot(tarc, varc)
-			ax5.plot(tbeam, ibeam)
-			ax6r.plot(tbeam, vbeam / 1000.)
-			ax7.plot(tbeam, perv)
-			ax8r.plot(tbeam, pbeam)
-		except:
-			print('no tree found for shot {}'.format(sh))
+			prefix = '.oper_diags.ltx_nbi'
+		t = get_tree_conn(sh, treename=tree)
+		print('gathering data for shot {} occurred on {}'.format(sh, get_data(t, '.metadata:timestamp')))
+		(tibeam, ibeam) = get_data(t, f'{prefix}.source_diags.i_hvps')
+		(tbeam, vbeam) = get_data(t, f'{prefix}.source_diags.v_hvps')
+		ibeam = np.interp(tbeam, tibeam, ibeam)
+		(tiarc, iarc) = get_data(t, f'{prefix}.source_diags.i_arc')
+		(tarc, varc) = get_data(t, f'{prefix}.source_diags.v_arc')
+		iarc = np.interp(tarc, tiarc, iarc)
+		perv = np.zeros_like(ibeam)
+		perv[:] = np.nan
+		t_beamon = np.where(vbeam >= v_thresh)  # only look at where beam is above 5kV
+		if len(t_beamon[0]) > 0:
+			pad = 0.25e-3  # remove this amt from beginning/end of beam
+			t_window = np.where((tbeam >= tbeam[t_beamon[0][0]] + pad) & (tbeam <= tbeam[t_beamon[0][-1]] - pad))
+			perv[t_window] = ibeam[t_window] / vbeam[t_window] ** 1.5 * 1.e6  # uPerv
+		else:
+			t_beamon = [.46, .48]  # set some default for setting nbi_win below
+			
+		if nbi_win is not None:
+			twin1, twin2 = nbi_win[0], nbi_win[1]
+		else:
+			twin1, twin2 = min(t_beamon) - 2.e-3, max(t_beamon) + 2.e-3
+		
+		# perv = ibeam / vbeam ** 1.5 * 1.e6  # uPerv
+		# perv[np.where(vbeam <= v_thresh)] = np.nan
+		# else:
+		# 	tbeam, ibeam, vbeam, tarc, iarc, varc, perv = np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
+		pbeam = ibeam * vbeam / 1000.  # kW
+		iav = np.where(vbeam > v_thresh)
+		vav = (vav * w + np.mean(vbeam[iav])) / (w + 1)
+		pav = (pav * w + np.mean(pbeam[iav])) / (w + 1)
+		w += 1
+		if arc_iv:
+			ax3.plot(tarc, iarc)
+			ax4r.plot(tarc, varc)
+		ax5.plot(tbeam, ibeam)
+		ax6r.plot(tbeam, vbeam / 1000.)
+		ax7.plot(tbeam, perv)
+		ax8r.plot(tbeam, pbeam)
+		if not nbi_only and is_nbi_shot(sh, t):
+			(times, ip) = get_data(t, '.diagnostics.magnetic.ip_rog')
+			(times2, ne) = get_data(t, '.diagnostics.microwave.interferom.phase_comp.ne_l')  # [m^-2]
+			ne = smooth(ne)
+			ii = np.where((times >= twin1) & (times <= twin2))
+			i2 = np.where((times2 >= twin1) & (times2 <= twin2))
+			ax1.plot(times[ii], -ip[ii] / 1000., label=sh)
+			ax2r.plot(times2[i2], ne[i2])
+	# except:
+	# 	print('no tree found for shot {}'.format(sh))
 	ax1.legend(ncol=int(np.ceil(len(shots) / 7)))
 	# ax2.axis('off')
 	
@@ -128,7 +183,9 @@ def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
 	ax8r.annotate('<P>={:.1f}'.format(pav), (twin1, pav))
 	ax1.set_ylim(bottom=0.)
 	ax2r.set_ylim(bottom=0.)
-	plt.grid(b=True, which='minor')
+
+
+# plt.grid(b=True, which='minor')
 
 
 def plot_nbi(shots):
@@ -340,13 +397,20 @@ def beam_nobeam(shots, twin=[450, 480]):
 
 
 if __name__ == '__main__':
+	# for sh in np.arange(509113,509340):
+	# 	t = get_tree_conn(sh, treename='ltx_nbi')
+	# 	print(f'shot {sh} occurred at {get_data(t, ".metadata:timestamp")}')
+	
 	# beam_nobeam([103658, 103617])
 	# beam_nobeam([103446, 103465])
 	# beam_nobeam([103898, 103899])
 	# quick_perv(105400 + np.array([28, 29, 30, 31, 32, 33]))
 	# nbi_ops([105428, 105427], arc_iv=True, nbi_win=[.45, .475])
 	# nbi_ops(105100 + np.array([83, 88, 89]), nbi_win=[.46, .485])
-	nbi_ops([105795], nbi_win=[.46, .48], arc_iv=False)
+	# nbi_ops(105961+np.arange(6), nbi_win=[.46, .48], arc_iv=True)
+	nbi_ops([106444, 106443], nbi_win=[.455, .475], arc_iv=True)
+	# plot_nbi_rawdata(509000 + np.array([355]))  # 355=fresh Li
+	# nbi_ops(106240 + np.array([2, 3, 4, 5, 6, 7, 8]), nbi_win=[.46, .48])
 	'''
 	nbi_ops([104584], arc_iv=True, nbi_win=[.46,.475])
 	nbi_ops([103658, 103617], arc_iv=True)#, nbi_win=[.46, .475])

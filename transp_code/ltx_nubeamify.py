@@ -173,7 +173,7 @@ def ltx_nubeamify(dir, trdat, **kwargs):
 			print('User denied output_file_letter, terminating.')
 			return
 	else:
-		trdat_out = f"{trdat[0:6]}{kwargs['output_file_letter']}{trdat[7:]}"
+		trdat_out = f"{trdat[0:6]}{kwargs['output_file_letter'].upper()}{trdat[7:]}"
 		if os.path.isfile(f'{dir}{trdat_out}'):
 			yn = input(f'output file {trdat_out} already exists: overwrite? (y/n)\n')
 			if yn.lower() != 'y':
@@ -189,6 +189,6 @@ def ltx_nubeamify(dir, trdat, **kwargs):
 
 
 if __name__ == '__main__':
-	dir = 'Z:/transp/t105795/'
-	trdat = '105795A01TR.DAT'
-	ltx_nubeamify(dir, trdat, ltx_shots=[105795], output_file_letter='b')
+	dir = 'Z:/transp/t105952/'
+	trdat = '105952A01TR.DAT'
+	ltx_nubeamify(dir, trdat, ltx_shots=[105952], output_file_letter='c')

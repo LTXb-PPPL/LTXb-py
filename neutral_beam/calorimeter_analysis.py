@@ -641,8 +641,8 @@ def calorimeter_21Jan():
 			dt_meas.append(dtm)
 			dt_pred.append(dtp)
 			perv.append(avp)
-		
 		dt_pred, dt_meas, perv, dperv = np.array(dt_pred), np.array(dt_meas), np.array(perv), np.array(dperv)
+		print(f'max: {np.max(dt_meas/dt_pred)} on shot {shots[np.where(dt_meas/dt_pred == np.max(dt_meas/dt_pred))[0][0]]}')
 		dt0, dt1, dt2, dt3, dt4 = np.array(dt0), np.array(dt1), np.array(dt2), np.array(dt3), np.array(dt4)
 		# pwr, dpwr, ipslope, ipstdev = np.array(pwr), np.array(dpwr), np.array(ipslope), np.array(ipstdev)
 		perv *= 1.e6
@@ -1338,15 +1338,19 @@ def stray_field_test_6apr22():
 
 
 if __name__ == '__main__':
+	# new_valve_data()
+	new_valve_cathode()
+	# new_valve_neutralizer()
 	# offcenter = 508397
 	# centered = 508188
 	# cal_guass_fit_offcenter(offcenter)
 	
+	# calorimeter_21Jan()  # max 53%
 	# stray_field_test_6apr22()
 	# calorimeter_current_scan_29mar22()
 	
 	# compare_neutralizer_onoff()
-	perveance_scan_7feb22(plot_vs='fwhm')
+	# perveance_scan_7feb22(plot_vs='fwhm')
 	# perveance_scan_28feb22()
 	# neutralization_scan_7feb22()
 	# realigned_beam_4feb22()

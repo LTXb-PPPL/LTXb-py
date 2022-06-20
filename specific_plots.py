@@ -180,9 +180,11 @@ def neutralization_improvements():
 	original = np.append(original, np.array(
 		[506587, 506589, 506590, 506591, 506592, 506593, 506594, 506596, 506598, 506600, 506601, 506603, 506609]))
 	
-	searching = np.array([506610, 506612, 506613, 506614, 506616, 506617, 506619, 506620, 506621, 506622, 506626,
-	                      506627, 506628, 506630, 506632, 506633, 506634, 506636, 506637, 506638, 506639, 506642,
-	                      506643, 506644, 506646, 506647, 506648])
+	searching = np.append(np.append(506600 + np.array(
+		[10, 12, 13, 14, 16, 17, 19, 20, 21, 22, 26, 27, 28, 30, 32, 33, 34, 36, 37, 38, 39, 42, 43, 44, 46, 47, 48]),
+	                                104600 + np.array([43, 42, 41, 40, 38, 37, 36])),
+	                      104900 + np.array([26, 27, 28, 29, 30, 32, 33, 34, 35, 36, 37, 43, 44, 45, 46]))
+	bestcase = 104643
 	dt_pred_orig, dt_meas_orig = np.array([]), np.array([])  # shot arrays for joules
 	for shot in original:
 		dtm, dtp = cal_dtemp(shot, dbug=False)
@@ -196,7 +198,9 @@ def neutralization_improvements():
 		dt_pred_srch = np.append(dt_pred_srch, dtp)
 	
 	slope_orig = np.nanmean(dt_meas_orig / dt_pred_orig)
-	slope_srch = dt_meas_srch[np.where(searching == 506648)[0][0]] / dt_pred_srch[np.where(searching == 506648)[0][0]]
+	slope_srch = np.nanmax(dt_meas_srch / dt_pred_srch)
+	# slope_srch = dt_meas_srch[np.where(searching == bestcase)[0][0]] / dt_pred_srch[
+	# 	np.where(searching == bestcase)[0][0]]
 	
 	fs = 14
 	fig, ax1 = plt.subplots()  # , figsize=(12, 6))
@@ -222,9 +226,151 @@ def neutralization_improvements():
 	plt.show()
 
 
+def dick_notable():
+	fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(nrows=2, ncols=2, sharex=True, figsize=(8, 5))
+	clrs = plt.rcParams['axes.prop_cycle'].by_key()['color']
+	leg_fs = 10  # fontsize for legend
+	fs = leg_fs + 2
+	xlab = '$E_{nbi}$ [keV]'
+	vbev = np.arange(10, 21) * 1000.  # 10-20kV
+	xplot = vbev / 1000.  # [kV]
+	shots = [1036171601 + i for i in range(11)]  # P for perveance held constant, voltage scan
+	perv = np.array([15.e-6] * len(shots))
+	ib = perv * vbev ** 1.5  # A
+	pb = ib * vbev  # W
+	
+	j_tot = pb * 7.e-3  # [J] tot put into plasma
+	ax1.plot(xplot, [p / 1000. for p in pb])
+	ax1.set_ylabel('Beam Power [kW]', fontsize=fs)
+	bden_arr = np.array([])  # [num.e12/cm^3]
+	bphto_arr = np.array([])  # [kW]
+	bphto_arr2 = np.array([])  # [kW]
+	bpshi_arr = np.array([])  # [J]
+	bplim_arr = np.array([])  # [J]
+	bpte_arr = np.array([])  # [J]
+	bpti_arr = np.array([])  # [J]
+	cxx_arr = np.array([])  # [J]
+	cxi_arr = np.array([])  # [J]
+	for shot in shots:
+		print(f'shot: {shot}')
+		bdens = SimpleSignal(shot, '\\bdens')  # [num/cm^3]
+		bphto = SimpleSignal(shot, '\\bphto')  # [W]
+		bpshi = SimpleSignal(shot, '\\bpshi')  # [W]
+		bplim = SimpleSignal(shot, '\\bplim')  # [W]
+		bpte = SimpleSignal(shot, '\\bpte')  # [W]
+		bpti = SimpleSignal(shot, '\\bpti')  # [W]
+		bpcxx = SimpleSignal(shot, '\\bpcxx')  # [W]
+		bpcxi = SimpleSignal(shot, '\\bpcxi')  # [W]
+		
+		t_prespike = max(np.where(bpcxi.dim1 <= .473)[0])  # cut off cxi integration before spike at end of shot
+		cxx_arr = np.append(cxx_arr, np.sum(bpcxx.data[1:] * (bpcxx.dim1[1:] - bpcxx.dim1[:-1])))
+		cxi_arr = np.append(cxi_arr,
+		                    np.sum(bpcxi.data[1:t_prespike] * (
+				                    bpcxi.dim1[1:t_prespike] - bpcxi.dim1[:t_prespike - 1])))
+		bpte_arr = np.append(bpte_arr, np.sum(bpte.data[1:] * (bpte.dim1[1:] - bpte.dim1[:-1])))
+		bpti_arr = np.append(bpti_arr, np.sum(bpti.data[1:] * (bpti.dim1[1:] - bpti.dim1[:-1])))
+		bpshi_arr = np.append(bpshi_arr, np.sum(bpshi.data[1:] * (bpshi.dim1[1:] - bpshi.dim1[:-1])))
+		bplim_arr = np.append(bplim_arr, np.sum(bplim.data[1:] * (bplim.dim1[1:] - bplim.dim1[:-1])))
+		bphto_arr2 = np.append(bphto_arr2, np.sum(bphto.data[1:] * (bphto.dim1[1:] - bphto.dim1[:-1])))
+		bphto_arr = np.append(bphto_arr, max(bphto.data) / 1000.)
+		bden_arr = np.append(bden_arr, max(bdens.data.flatten()) / 1.e12)
+	ax2.yaxis.set_visible(False)
+	ax2r = ax2.twinx()
+	ax2r.plot(xplot, bphto_arr, 'o-', c=clrs[1])
+	ax2r.set_ylabel('max(Beam Heating) [kW]', fontsize=fs)
+	ax2r.set_ylim(ymin=0)
+	
+	ax3.plot(xplot, bpshi_arr / j_tot, 'o-', label='shine-through')
+	ax3.plot(xplot, bplim_arr / j_tot, 'o-', label='orbit loss')
+	ax3.plot(xplot, cxi_arr / j_tot, 'o-', label='cx int')
+	ax3.plot(xplot, cxx_arr / j_tot, 'o-', label='cx ext')
+	ax3.set_ylabel('Total Fraction', fontsize=fs)
+	ax3.set_xlabel(xlab, fontsize=fs)
+	ax3.legend(fontsize=leg_fs, loc='upper left')
+	
+	ax4.yaxis.set_visible(False)
+	ax4r = ax4.twinx()
+	ax4r.plot(xplot, bphto_arr2, 'o-', label='total')
+	ax4r.plot(xplot, bpte_arr, 'o-', label='elec')
+	ax4r.plot(xplot, bpti_arr, 'o-', label='ions')
+	ax4.set_xlabel(xlab, fontsize=fs)
+	ax4r.set_ylabel('Total Beam Heating [J]', fontsize=fs)
+	ax4r.legend(fontsize=leg_fs)
+	
+	for ax in [ax1, ax2, ax2r, ax3, ax4, ax4r]:
+		ax.tick_params(labelsize=fs)
+	
+	plt.tight_layout()
+	plt.show()
+
+
+def santanu_sigs():
+	shot = 105439
+	t = get_tree_conn(shot, treename='ltx_b')
+	(times, ip) = get_data(t, '.diagnostics.magnetic.ip_rog')
+	(times2, ne) = get_data(t, '.diagnostics.microwave.interferom.phase_comp.ne_l')  # [m^-2]
+	(tibeam, ibeam) = get_data(t, '.oper_diags.ltx_nbi.source_diags.i_hvps')
+	(tbeam, vbeam) = get_data(t, '.oper_diags.ltx_nbi.source_diags.v_hvps')
+	ibeam = np.interp(tbeam, tibeam, ibeam)
+	pbeam = ibeam * vbeam
+	
+	ne[np.where((times2 > .492) | (times2 < .441))] = np.nan
+	ne /= 0.5  # convert neL to ne
+	fs = 14
+	fig, ax = plt.subplots(figsize=(10.2, 4))
+	ax.plot(times, -ip * 1.e-5, label='$I_p$ ($\\times 10^2$ kA)')
+	ax.plot(times2, ne * 1.e-19, label='$n_e$ ($\\times 10^{19}$ m$^{-3}$)')
+	ax.plot(tbeam, pbeam * 1.e-6, label='$P_{nbi}$ (MW)')
+	ax.tick_params(labelsize=fs)
+	ax.set_xlim((.43, .52))
+	ax.set_ylim(bottom=-.1)
+	ax.set_xlabel('time (s)', fontsize=fs)
+	ax.grid()
+	plt.legend(fontsize=fs)
+	plt.tight_layout()
+	plt.show()
+
+
+def tangency_scan_105952_105795():
+	rtans = [18.0, 20.0, 22., 24., 26., 28., 30., 32., 34., 36., 38., 40.]
+	dat = np.zeros((2, 2, len(rtans)))  # transp_runs, sigs, rtans
+	for i in np.arange(12):
+		for ish, sh in enumerate([1057952000, 1059522000]):
+			transp_run = sh + i + 1
+			try:
+				s1 = SimpleSignal(transp_run, '\\bphto')
+				dat[ish, 0, i] = max(s1.data / 1000.)  # kW
+				bdens = SimpleSignal(transp_run, '\\bdens2_h')
+				bmvol = SimpleSignal(transp_run, '\\BMVOL')
+				ntot = [np.sum(bdens.data[s, :] * bmvol.data[s, :]) for s in np.arange(len(bmvol.dim2))]
+				dat[ish, 1, i] = max(ntot)
+			except TypeError:
+				dat[ish, 0, i] = np.nan  # error in transp run
+				dat[ish, 1, i] = np.nan
+				print(f'error processing transp run {transp_run}')
+	[t21, t24, t33, t35] = np.interp([21, 24, 33, 35], rtans, dat[0, 0, :])
+	[tt21, tt24, tt33, tt35] = np.interp([21, 24, 33, 35], rtans, dat[0, 1, :])
+	print(f'\nkW increase from:\n21->24: {(t24/t21-1)*100.:.1f}%\n24->33: {(t33/t24-1)*100.:.1f}%\n24->35: {(t35/t24-1)*100.:.1f}%\n33->35: {(t35/t33-1)*100.:.1f}%\n')
+	print(f'\nNtot increase from:\n21->24: {(tt24/tt21-1)*100.:.1f}%\n24->33: {(tt33/tt24-1)*100.:.1f}%\n24->35: {(tt35/tt24-1)*100.:.1f}%\n33->35: {(tt35/tt33-1)*100.:.1f}%\n')
+	fig, (ax1, ax2) = plt.subplots(ncols=2)
+	ax1.plot(rtans, dat[0, 0, :], label='105795')
+	ax2.plot(rtans, dat[0, 1, :])
+	ax1.plot(rtans, dat[1, 0, :], label='105952')
+	ax2.plot(rtans, dat[1, 1, :])
+	ax1.set_xlabel('$r_{tan}$ (cm)')
+	ax1.set_ylabel('Total beam heating (kW)')
+	ax2.set_xlabel('$r_{tan}$ (cm)')
+	ax2.set_ylabel('$max(N_tot)$')
+	ax1.legend()
+	plt.tight_layout()
+	plt.show()
+
+
 if __name__ == '__main__':
-	# beam_nobeam_103446_465()
-	# shot_analysis_01mar22()
-	# compare_thermocouple_sigs_to_russian_trace()
-	# proposal_nfi()
-	neutralization_improvements()
+	tangency_scan_105952_105795()
+# santanu_sigs()
+# beam_nobeam_103446_465()
+# shot_analysis_01mar22()
+# compare_thermocouple_sigs_to_russian_trace()
+# proposal_nfi()
+# neutralization_improvements()

@@ -7,12 +7,9 @@ matlab_dir = 'Z:/matlab/conbeam/'
 fig_dir = "Z:/matlab/botdata/"
 
 
-def create_map(eqdsk, shot, runnum):
-	nel = 1.e19  # num/m^3*L
-	ebeam = 17000.  # eV of beam
-
+def create_map(eqdsk, shot, runnum, ebeam, nel):
 	os.chdir(matlab_dir)
-	eqdsk = eqdsk.replace('\\', '/')
+	# eqdsk = eqdsk.replace('\\', '/')
 	print(f'making map for: {eqdsk}')
 	command_string = ''.join(
 		f'shots={[shot]};Ecsts={[ebeam]};runnums={[runnum]};times={[-1]};ips={[-1]};nels={[nel]};bot_create_map;'.split(
