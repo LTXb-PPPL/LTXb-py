@@ -642,7 +642,8 @@ def calorimeter_21Jan():
 			dt_pred.append(dtp)
 			perv.append(avp)
 		dt_pred, dt_meas, perv, dperv = np.array(dt_pred), np.array(dt_meas), np.array(perv), np.array(dperv)
-		print(f'max: {np.max(dt_meas/dt_pred)} on shot {shots[np.where(dt_meas/dt_pred == np.max(dt_meas/dt_pred))[0][0]]}')
+		print(
+			f'max: {np.max(dt_meas / dt_pred)} on shot {shots[np.where(dt_meas / dt_pred == np.max(dt_meas / dt_pred))[0][0]]}')
 		dt0, dt1, dt2, dt3, dt4 = np.array(dt0), np.array(dt1), np.array(dt2), np.array(dt3), np.array(dt4)
 		# pwr, dpwr, ipslope, ipstdev = np.array(pwr), np.array(dpwr), np.array(ipslope), np.array(ipstdev)
 		perv *= 1.e6
@@ -912,7 +913,7 @@ def perveance_scan_7feb22(plot_vs='fwhm'):
 		units = ' (mm)'
 	else:
 		units = ''
-		
+	
 	sh1 = 105100 + np.array(
 		[24, 27, 31, 32, 35, 45, 47, 48, 49, 50, 51, 52, 53, 54, 55, 57, 58, 59, 61, 62, 63, 64, 65, 67, 68, 69, 71, 73,
 		 74, 75, 76])
@@ -935,7 +936,7 @@ def perveance_scan_7feb22(plot_vs='fwhm'):
 	ax1.tick_params(labelsize=fs)
 	plt.tight_layout()
 
-	
+
 def special_calibration(redo=False):
 	lvm_files = ['Y:/thermocouple/Calorimeter/04082022171755.lvm',
 	             'Y:/thermocouple/Calorimeter/04062022125726.lvm',
@@ -1117,7 +1118,7 @@ def calorimeter_current_scan_29mar22():
 	plt.tight_layout()
 
 
-def cal_guass_fit_offcenter(shot):
+def special_cal_guass_fit_offcenter(shot):
 	# center, down, right, up, left
 	lvm_files, calibs = special_calibration(redo=False)  # figure out calibs per lvm
 	t, rtd_nam, c0, c1, c2, c3, c4 = special_extraction(lvm_files, shot, calibs)
@@ -1135,7 +1136,7 @@ def cal_guass_fit_offcenter(shot):
 		rtherms = [np.sqrt((xtherms[i] - xysig[0]) ** 2 + (ytherms[i] - xysig[1]) ** 2) for i in range(5)]  # [mm]
 		thermvals = [np.exp(-rtherms[i] ** 2 / (2 * xysig[2] ** 2)) for i in range(5)]
 		normsim = [thermvals[i] / max(thermvals) for i in range(5)]  # normalize to compare to normalized real data
-		diff = np.array([normvals[i] - normsim[i] for i in range(5)])*10000
+		diff = np.array([normvals[i] - normsim[i] for i in range(5)]) * 10000
 		return np.sqrt(np.sum(diff ** 2))
 	
 	xguess = [0, 0, 10]  # guess xoffset=0, yoffset=0, sigma=10mm
@@ -1154,11 +1155,61 @@ def cal_guass_fit_offcenter(shot):
 	ax1.legend()
 	ax1.set_xlabel('time')
 	ax1.set_ylabel('Temp \degree C')
-	rr = np.linspace(0, 1.1*max(rtherms), endpoint=True)
+	rr = np.linspace(0, 1.1 * max(rtherms), endpoint=True)
 	ax2.plot(rr, np.exp(-rr ** 2 / (2 * fit[2] ** 2)))
 	ax2.plot(rtherms, normvals, 's')
 	print(f'x-shift: {fit[0]:.1f} mm\ny-shift: {fit[1]:.1f} mm\nfwhm: {fwhm:.1f} mm')
 	plt.show()
+
+
+def cal_guass_fit_offcenter(shot, ret='fwhm', doplot=False):
+	# center, down, right, up, left
+	t, c0, c1, c2, c3, c4 = cal_temp_sigs(shot, calonly=True)
+	dt0, dt1, dt2, dt3, dt4 = max(c0), max(c1), max(c2), max(c3), max(c4)  # already removed offset
+	'''
+	thermocouples are 45 mm off center
+	calorimeter diameter 150 mm
+	'''
+	maxdt = max([dt0, dt1, dt2, dt3, dt4])
+	normvals = [dt0 / maxdt, dt1 / maxdt, dt2 / maxdt, dt3 / maxdt, dt4 / maxdt]  # normalized thermocouple data
+	xtherms, ytherms = [0, 0, 45, 0, -45], [0, -45, 0, 45, 0]  # x, y coords of thermocouples [mm]
+	
+	def minfunc(xysig):
+		rtherms = [np.sqrt((xtherms[i] - xysig[0]) ** 2 + (ytherms[i] - xysig[1]) ** 2) for i in range(5)]  # [mm]
+		thermvals = [np.exp(-rtherms[i] ** 2 / (2 * xysig[2] ** 2)) for i in range(5)]
+		normsim = [thermvals[i] / max(thermvals) for i in range(5)]  # normalize to compare to normalized real data
+		diff = np.array([normvals[i] - normsim[i] for i in range(5)]) * 10000
+		return np.sqrt(np.sum(diff ** 2))
+	
+	xguess = [0, 0, 10]  # guess xoffset=0, yoffset=0, sigma=10mm
+	res = minimize(minfunc, xguess, method='SLSQP')
+	print(res.message)
+	
+	fit = res.x
+	rtherms = [np.sqrt((xtherms[i] - fit[0]) ** 2 + (ytherms[i] - fit[1]) ** 2) for i in range(5)]  # [mm]
+	thermvals = [np.exp(-rtherms[i] ** 2 / (2 * fit[2] ** 2)) for i in range(5)]
+	normsim = [thermvals[i] / max(thermvals) for i in range(5)]  # normalize to compare to normalized real data
+	fwhm = 2 * np.sqrt(2 * np.log(2)) * abs(fit[2])
+	updown = dt3 / dt1  # ratio of upper/lower, some measure of neutralization efficiency- perm magnet bends res ion frac up
+	if doplot:
+		fig, (ax1, ax2) = plt.subplots(ncols=2)
+		for c, l in zip([c0, c1, c2, c3, c4], ['center', 'lower', 'right', 'upper', 'left']):
+			ax1.plot(t, c, label=l)
+		ax1.legend()
+		ax1.set_xlabel('time')
+		ax1.set_ylabel('Temp \degree C')
+		rr = np.linspace(0, 1.1 * max(rtherms), endpoint=True)
+		ax2.plot(rr, np.exp(-rr ** 2 / (2 * fit[2] ** 2)))
+		ax2.plot(rtherms, normvals, 's')
+		print(f'x-shift: {fit[0]:.1f} mm\ny-shift: {fit[1]:.1f} mm\nfwhm: {fwhm:.1f} mm')
+		plt.show()
+	
+	if ret.lower() == 'fwhm':
+		return fwhm, updown, fit[0], fit[1]
+	# elif ret.lower() == 'power_frac_to_cal':
+	# 	return power_frac_to_cal, sufficient_neut
+	elif ret.lower() == 'efold':
+		return np.sqrt(2) * fit[2], updown, fit[0], fit[1]
 
 
 def cal_gauss_fit(shot, ret='fwhm'):
@@ -1194,7 +1245,7 @@ def cal_gauss_fit(shot, ret='fwhm'):
 	elif ret.lower() == 'power_frac_to_cal':
 		return power_frac_to_cal, sufficient_neut
 	elif ret.lower() == 'efold':
-		return np.sqrt(2)*sig, sufficient_neut
+		return np.sqrt(2) * sig, sufficient_neut
 
 
 def gauss2d_integral(nsig=1., inspect=False):
@@ -1327,19 +1378,50 @@ def stray_field_test_6apr22():
 	plt.show()
 
 
-# lvmf = 'Y:/thermocouple/Calorimeter/06042022______.lvm'
-# nbionly = 5082** + np.array([])
-# nbifields = 5082** + np.array([])
-#
-# for shotset in [nbionly, nbifields]:
-#
-# 	for shot in shotset:
-# 		tt, c0, c1, c2, c3, c4 = cal_temp_sigs(shot)
+def perveance_scan_29Jun22(plot_vs='fwhm'):
+	"""
+	beam misaligned on calorimeter, rtan~25cm
+	looking to see if beam is still neutralizing and getting good power to calorimeter
+	"""
+	if plot_vs.lower() == 'fwhm' or plot_vs.lower() == 'efold':
+		units = ' (mm)'
+	else:
+		units = ''
+	
+	fig, (ax1) = plt.subplots(ncols=1)  # 2, figsize=(10, 5))
+	sh1 = 106600 + np.array([60, 62, 64, 65, 67, 68, 69, 70, 71, 72])  # Current scan at 15kV, rtan~25cm
+	sh2 = 106600 + np.array([74, 76, 78, 79])  # Current scan at 12.5kV, rtan~25cm
+	sh3 = 106700 + np.array([4, 8, 10, 11, 12, 13])  # Current scan at 15kV, rtan~21cm, source centered on neutralizer
+	sh4 = 106700 + np.array([17, 20, 23, 25, 29, 30])  # Current scan at 12.5kV, rtan~21cm, source centered on neutralizer
+	descs = ['15kV, rtan=25cm', '12.5kV, rtan=25cm', '15kV, rtan=21cm', '12.5kV, rtan=21cm']
+	for sh in [sh1, sh2, sh3, sh4]:
+		fwhm_arr, perv_arr = np.array([]), np.array([])
+		updown_arr, xshift_arr, yshift_arr = np.array([]), np.array([]), np.array([])
+		for ish, shot in enumerate(sh):
+			perv_arr = np.append(perv_arr, avg_perv(shot))
+			fwhm, updown, xshift, yshift = cal_guass_fit_offcenter(shot, ret=plot_vs, doplot=False)
+			fwhm_arr = np.append(fwhm_arr, fwhm)
+			updown_arr = np.append(updown_arr, updown)
+			xshift_arr = np.append(xshift_arr, xshift)
+			yshift_arr = np.append(yshift_arr, yshift)
+		fs = 14
+		ax1.plot(perv_arr * 1.e6, fwhm_arr, 'o')
+		for i in range(len(xshift_arr)):
+			note = f'{xshift_arr[i]:.1f}\n{yshift_arr[i]:.1f}'
+			ax1.annotate(note, (perv_arr[i] * 1.e6, fwhm_arr[i]))
+	ax1.set_xlabel('perveance ($\\times 10^{-6}$)', fontsize=fs)
+	ax1.set_ylabel(f'{plot_vs}{units}', fontsize=fs)
+	ax1.tick_params(labelsize=fs)
+	clrs = plt.rcParams['axes.prop_cycle'].by_key()['color']
+	for i, desc in enumerate(descs):
+		ax1.plot(np.nan, np.nan, 'o', c=clrs[i], label=desc)
+	ax1.legend(loc='upper right')
+	plt.tight_layout()
 
 
 if __name__ == '__main__':
 	# new_valve_data()
-	new_valve_cathode()
+	# new_valve_cathode()
 	# new_valve_neutralizer()
 	# offcenter = 508397
 	# centered = 508188
@@ -1359,4 +1441,5 @@ if __name__ == '__main__':
 	# calorimeter_positional_variation()
 	# beam_realignment()
 	# calorimeter_21Jan()  # coincides w/settings used for 14Jan Perveance scan
+	perveance_scan_29Jun22()
 	plt.show()

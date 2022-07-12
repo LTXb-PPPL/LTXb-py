@@ -329,7 +329,7 @@ def ltx_limiter():
 	nlim = numel(rlimiter);
 	fclose(myFile);
 	'''
-	lim_fn = 'ltx_limiter.txt'
+	lim_fn = 'Z:/PycharmProjects/LTXb-py/ltx_limiter.txt'
 	f = open(lim_fn, 'r')
 	form = r'-?\d+.\d+E[+-]\d+'
 	nn = int(re.findall(r'\d+', f.readline())[0])

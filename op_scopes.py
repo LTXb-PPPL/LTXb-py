@@ -126,10 +126,13 @@ def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
 		print('gathering data for shot {} occurred on {}'.format(sh, get_data(t, '.metadata:timestamp')))
 		(tibeam, ibeam) = get_data(t, f'{prefix}.source_diags.i_hvps')
 		(tbeam, vbeam) = get_data(t, f'{prefix}.source_diags.v_hvps')
+		# (tacc, iacc) = get_data(t, f'{prefix}.source_diags.i_accel_grid')
+		# (tdec, idec) = get_data(t, f'{prefix}.source_diags.i_decel_grid')
 		ibeam = np.interp(tbeam, tibeam, ibeam)
 		(tiarc, iarc) = get_data(t, f'{prefix}.source_diags.i_arc')
 		(tarc, varc) = get_data(t, f'{prefix}.source_diags.v_arc')
 		iarc = np.interp(tarc, tiarc, iarc)
+		# iacc = np.interp(tdec, tacc, iacc)
 		perv = np.zeros_like(ibeam)
 		perv[:] = np.nan
 		t_beamon = np.where(vbeam >= v_thresh)  # only look at where beam is above 5kV
@@ -139,7 +142,7 @@ def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
 			perv[t_window] = ibeam[t_window] / vbeam[t_window] ** 1.5 * 1.e6  # uPerv
 		else:
 			t_beamon = [.46, .48]  # set some default for setting nbi_win below
-			
+		
 		if nbi_win is not None:
 			twin1, twin2 = nbi_win[0], nbi_win[1]
 		else:
@@ -158,6 +161,8 @@ def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
 			ax3.plot(tarc, iarc)
 			ax4r.plot(tarc, varc)
 		ax5.plot(tbeam, ibeam)
+		# ax5.plot(tdec, iacc, '--')
+		# ax5.plot(tdec, iacc-idec, '-.')
 		ax6r.plot(tbeam, vbeam / 1000.)
 		ax7.plot(tbeam, perv)
 		ax8r.plot(tbeam, pbeam)
@@ -397,6 +402,9 @@ def beam_nobeam(shots, twin=[450, 480]):
 
 
 if __name__ == '__main__':
+	nbi_ops(106700 + np.array([51, 52, 53, 54, 55]), nbi_win=[.458, .468], arc_iv=False)
+	plt.show()
+	
 	# for sh in np.arange(509113,509340):
 	# 	t = get_tree_conn(sh, treename='ltx_nbi')
 	# 	print(f'shot {sh} occurred at {get_data(t, ".metadata:timestamp")}')
@@ -408,7 +416,6 @@ if __name__ == '__main__':
 	# nbi_ops([105428, 105427], arc_iv=True, nbi_win=[.45, .475])
 	# nbi_ops(105100 + np.array([83, 88, 89]), nbi_win=[.46, .485])
 	# nbi_ops(105961+np.arange(6), nbi_win=[.46, .48], arc_iv=True)
-	nbi_ops([106444, 106443], nbi_win=[.455, .475], arc_iv=True)
 	# plot_nbi_rawdata(509000 + np.array([355]))  # 355=fresh Li
 	# nbi_ops(106240 + np.array([2, 3, 4, 5, 6, 7, 8]), nbi_win=[.46, .48])
 	'''
@@ -430,4 +437,3 @@ if __name__ == '__main__':
 	# nbi_ops(hughes_shots, nbi_win=(0.466, 0.475))
 	nbi_ops(hughes_shots, nbi_win=(0.46, 0.48), arc_iv=True)
 '''
-	plt.show()
