@@ -11,9 +11,11 @@ from neutral_beam.resonance.vdote import vdote
 if os.path.exists('Z:/users/wcapecch/'):
 	direc = 'Z:/users/wcapecch/'
 	proj_direc = 'Z:/PycharmProjects/LTXb-py/'
+	pych_direc = 'Z:/PycharmProjects/'
 elif os.path.exists('//samba/wcapecch/'):
 	direc = '//samba/wcapecch/'
 	proj_direc = '//samba/wcapecch/PycharmProjects/LTXb-py/'
+	pych_direc = '//samba/wcapecch/PycharmProjects/'
 
 
 def phase_scan_ltx(mnum=1, nnum=2, fepm=None, psimode=None, phi0=None, verbose=False):  # , parallel=parallel,
@@ -30,7 +32,7 @@ def phase_scan_ltx(mnum=1, nnum=2, fepm=None, psimode=None, phi0=None, verbose=F
 	if phi0 is None:
 		phi0 = [0.]
 	
-	orbit_dir = f'{proj_direc}neutral_beam/resonance/orbits/'
+	orbit_dir = f'{pych_direc}data/orbits/'
 	orbits = glob.glob(f'{orbit_dir}*orbit.sav')
 	for orbit in orbits:
 		if not os.path.isfile(f'{orbit[:-4]}.pkl'):  # pickled version doesn't exist

@@ -13,7 +13,7 @@ elif os.path.exists('//samba/wcapecch/'):
 
 
 def field_line_pitch_not_constant_on_flux_surface():
-	orbit = f'{proj_direc}neutral_beam/resonance/orbits/r10cm_rtan22cm_13kev_orbit.p'
+	orbit = f'{direc}PycharmProjects/data/orbits/r10cm_rtan22cm_13kev_orbit.p'
 	orbit_dat = pickle.load(open(orbit, 'rb'))
 	out = orbit_dat['orb']['OUT']
 	norm_psi = 0.8  # pick a flux contour to examine

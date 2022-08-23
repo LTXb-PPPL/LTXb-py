@@ -53,9 +53,9 @@ if __name__ == '__main__':
 	elif os.path.exists('//samba/wcapecch/'):
 		direc = '//samba/wcapecch/'
 		proj_direc = '//samba/wcapecch/PycharmProjects/LTXb-py/'
-	pfns = glob.glob(f'{proj_direc}neutral_beam/resonance/orbits/*.pkl')
+	pfns = glob.glob(f'{direc}PycharmProjects/data//orbits/*.pkl')
 	test_pickled_orbit(pfns[0])
 
-# orbit_dir = f'{proj_direc}neutral_beam/resonance/orbits/'
+# orbit_dir = f'{direc}PycharmProjects/data/orbits/'
 # orbits = glob.glob(orbit_dir + '*orbit.sav')
 # convert_sav_to_dict(orbits[0])
