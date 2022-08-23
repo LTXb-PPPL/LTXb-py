@@ -4,18 +4,19 @@ These classes read in data from .CDF files
 The CDF files are created by the user after a TRANSP run completes
 Details on generating the CDF files can be found on the LTXb Wiki
 """
+import datetime
 
 from matplotlib import ticker
-from scipy.io import netcdf
 import numpy as np
 import matplotlib.pyplot as plt
 import MDSplus
-
+from scipy.io import netcdf
 from helpful_stuff import read_transp_cdf, closest
 
 
 class FBM:
 	def __init__(self, cdf_file, label=None):
+		tstrt = datetime.datetime.now()
 		cdf = netcdf.netcdf_file(cdf_file, 'r', mmap=False)
 		vars = cdf.variables
 		self.cdf_file = cdf_file
@@ -33,7 +34,9 @@ class FBM:
 		self.bmvolunits = vars['BMVOL'].units
 		self.n_tot, self.n_tot_arr = self.compute_n_tot()  # vs energy
 		cdf.close()
-	
+		tstp = datetime.datetime.now()
+		print(f'FBM cdf load time: {(tstp-tstrt).seconds} sec')
+		
 	def compute_n_tot(self):
 		# fbm has indices of [bmvol, pitch, energy]
 		n_tot_arr = np.zeros_like(self.energy)
@@ -127,8 +130,10 @@ class FBM:
 class Halo3D:
 	def __init__(self, cdf_file, label=None):
 		print(f'Reading in {cdf_file}... be patient')
+		tstrt = datetime.datetime.now()
 		cdf = netcdf.netcdf_file(cdf_file, 'r', mmap=False)
 		vars = cdf.variables
+		self.vars = vars
 		self.cdf_file = cdf_file
 		self.label = label
 		self.numavg = vars['NUMAVG'].data
@@ -165,6 +170,8 @@ class Halo3D:
 		self.num_vs_lbox = self.n0_vs_lbox * self.dv  # num vs lbox
 		cdf.close()
 		print('N0_tot = {:.4e}'.format(np.sum(self.num_vs_lbox)))
+		tstp = datetime.datetime.now()
+		print(f'Halo neutral CDF load time {(tstp - tstrt).seconds} sec')
 	
 	def plot(self, xslice=None, yslice=None, lslice=None, label=None, nbeam=1):
 		nplots = 1

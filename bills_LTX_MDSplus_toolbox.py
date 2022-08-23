@@ -20,7 +20,8 @@ if os.path.exists('/u/wcapecch/python'):
 	print("In the lab eh? Carry on")
 else:
 	runfromhome = 1
-	print("I see you're working from home... enjoy your coffee!!")
+	print(f"how'd I get here?")
+	# print("I see you're working from home... enjoy your coffee!!")
 
 # elif 'Paul\\Documents\\Laboratory' in pathdir:
 

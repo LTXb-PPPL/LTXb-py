@@ -7,7 +7,7 @@ import numpy as np
 import MDSplus
 import re
 import datetime
-from bills_LTX_MDSplus_toolbox import *
+# from bills_LTX_MDSplus_toolbox import *
 import glob
 import os
 
@@ -247,7 +247,8 @@ def read_eqdsk(eqdsk, plot=False):
 	          'toteqd': toteqd, 'psimx1': psimx1, 'psimx2': psimx2, 'xax1': xax1, 'xax2': xax2, 'zax1': zax1,
 	          'zax2': zax2, 'psisep': psisep, 'xsep': xsep, 'ysep': ysep, 'fpol': fpol, 'pres': pres, 'ffpeqd': ffpeqd,
 	          'ppeqd': ppeqd, 'q': q, 'nrlimit': nrlimit, 'nrves': nrves, 'rlimit': rlimit, 'zlimit': zlimit,
-	          'rves': rves, 'zves': zves, 'x': x, 'y': y, 'psixy': psixy, 'real_psilim': real_psilim, 'q_xy': q_xy,
+	          'rves': rves, 'zves': zves, 'x': x, 'y': y, 'psi': psiout, 'psixy': psixy, 'real_psilim': real_psilim,
+	          'q_xy': q_xy,
 	          'bphi_xy': bphi_xy, 'bp_xy': bp_xy, 'x_xy': x_xy, 'y_xy': y_xy, 'br_xy': br_xy, 'bz_xy': bz_xy,
 	          'bp_mp': bp_mp, 'bphi_mp': bphi_mp, 'bave_mp': bave_mp, 'bave_xy': bave_xy, 'br_mp': br_mp,
 	          'bz_mp': bz_mp, 'ip_is_cw': ip_is_cw, 'bt_is_cw': bt_is_cw}
@@ -258,66 +259,66 @@ def read_eqdsk(eqdsk, plot=False):
 
 
 def read_eqdsk2(filename):
-
-    def read_1d(fid, j, n):
-        output = np.zeros((n,))
-        for i in range(n):
-            if j == 0:
-                line = fid.readline()
-            output[i] = line[j:j+16]
-            j += 16
-            if j == 16*5:
-                j = 0
-        return output, j
-
-    def read_2d(fid, j, n, m):
-        output = np.zeros((m, n))
-        for k in range(n):
-            for i in range(m):
-                if j == 0:
-                    line = fid.readline()
-                output[i, k] = line[j:j+16]
-                j += 16
-                if j == 16*5:
-                    j = 0
-        return output, j
-    # Read-in data
-    eqdsk_obj = {}
-    with open(filename, 'r') as fid:
-        # Get sizes
-        line = fid.readline()
-        split_line = line.split()
-        eqdsk_obj['nz'] = int(split_line[-1])
-        eqdsk_obj['nr'] = int(split_line[-2])
-        # Read header content
-        line_keys = [['rdim',  'zdim',  'raxis',  'rleft',  'zmid'],
-                     ['raxis', 'zaxis', 'psimax', 'psimin', 'bcentr'],
-                     ['itor',  'skip',  'skip',   'skip',   'skip'],
-                     ['skip',  'skip',  'skip',   'skip',   'skip']]
-        for i in range(4):
-            line = fid.readline()
-            for j in range(5):
-                if line_keys[i][j] == 'skip':
-                    continue
-                line_seg = line[j*16:(j+1)*16]
-                eqdsk_obj[line_keys[i][j]] = float(line_seg)
-        # Read flux profiles
-        j = 0
-        keys = ['fpol', 'pres', 'ffprime', 'pprime']
-        for key in keys:
-            eqdsk_obj[key], j = read_1d(fid, j, eqdsk_obj['nr'])
-        # Read PSI grid
-        eqdsk_obj['psirz'], j = read_2d(fid, j, eqdsk_obj['nz'],
-                                        eqdsk_obj['nr'])
-        # Read q-profile
-        eqdsk_obj['qpsi'], j = read_1d(fid, j, eqdsk_obj['nr'])
-        # Skip line (data already present)
-        line = fid.readline()
-        # Read outer flux surface
-        eqdsk_obj['rzout'], j = read_2d(fid, j, eqdsk_obj['nr'], 2)
-        # Read limiting corners
-        eqdsk_obj['rzlim'], j = read_2d(fid, j, 5, 2)
-    return eqdsk_obj
+	def read_1d(fid, j, n):
+		output = np.zeros((n,))
+		for i in range(n):
+			if j == 0:
+				line = fid.readline()
+			output[i] = line[j:j + 16]
+			j += 16
+			if j == 16 * 5:
+				j = 0
+		return output, j
+	
+	def read_2d(fid, j, n, m):
+		output = np.zeros((m, n))
+		for k in range(n):
+			for i in range(m):
+				if j == 0:
+					line = fid.readline()
+				output[i, k] = line[j:j + 16]
+				j += 16
+				if j == 16 * 5:
+					j = 0
+		return output, j
+	
+	# Read-in data
+	eqdsk_obj = {}
+	with open(filename, 'r') as fid:
+		# Get sizes
+		line = fid.readline()
+		split_line = line.split()
+		eqdsk_obj['nz'] = int(split_line[-1])
+		eqdsk_obj['nr'] = int(split_line[-2])
+		# Read header content
+		line_keys = [['rdim', 'zdim', 'raxis', 'rleft', 'zmid'],
+		             ['raxis', 'zaxis', 'psimax', 'psimin', 'bcentr'],
+		             ['itor', 'skip', 'skip', 'skip', 'skip'],
+		             ['skip', 'skip', 'skip', 'skip', 'skip']]
+		for i in range(4):
+			line = fid.readline()
+			for j in range(5):
+				if line_keys[i][j] == 'skip':
+					continue
+				line_seg = line[j * 16:(j + 1) * 16]
+				eqdsk_obj[line_keys[i][j]] = float(line_seg)
+		# Read flux profiles
+		j = 0
+		keys = ['fpol', 'pres', 'ffprime', 'pprime']
+		for key in keys:
+			eqdsk_obj[key], j = read_1d(fid, j, eqdsk_obj['nr'])
+		# Read PSI grid
+		eqdsk_obj['psirz'], j = read_2d(fid, j, eqdsk_obj['nz'],
+		                                eqdsk_obj['nr'])
+		# Read q-profile
+		eqdsk_obj['qpsi'], j = read_1d(fid, j, eqdsk_obj['nr'])
+		# Skip line (data already present)
+		line = fid.readline()
+		# Read outer flux surface
+		eqdsk_obj['rzout'], j = read_2d(fid, j, eqdsk_obj['nr'], 2)
+		# Read limiting corners
+		eqdsk_obj['rzlim'], j = read_2d(fid, j, 5, 2)
+	return eqdsk_obj
 
 
 def ltx_limiter():
@@ -423,7 +424,7 @@ def avg_perv(shot, Ej=False, ib_return=False, twin=None):
 		# 	(.46 < tv) & (tv < .463))  # look between 460-463ms for these shots (ignore rough Ibeam startup)
 		ibeamon = np.where(vb > 5000)[0]
 		dt = 0.25e-3
-		(ton, toff) = (tv[ibeamon[0]]+dt, tv[ibeamon[-1]]-dt)
+		(ton, toff) = (tv[ibeamon[0]] + dt, tv[ibeamon[-1]] - dt)
 		t_beamon = np.where((ton < tv) & (tv < toff))
 	else:
 		t_beamon = np.where((twin[0] < tv) & (tv < twin[1]))

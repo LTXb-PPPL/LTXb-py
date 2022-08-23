@@ -402,7 +402,16 @@ def beam_nobeam(shots, twin=[450, 480]):
 
 
 if __name__ == '__main__':
-	nbi_ops(106700 + np.array([51, 52, 53, 54, 55]), nbi_win=[.458, .468], arc_iv=False)
+	"""
+	beam on: 461-467
+	early = [604] but after TS
+	ok = [606,554,555,556,551,553,525,538,542,543,526,527,532,535,536,560,531,544,569,570,571,572,598,599,603]
+	bad = [523, 605] but after TS
+	high-short = [561,562,563,564,565] CAUTION- using diff beam here! (TS at 463, 464)
+	late = [566,567,568,530] CAUTION- beam late! (TS at 465, 466)
+	weak-start = [603]
+	"""
+	nbi_ops(106000 + np.array([606,554,555,556,551,553,525,538,542,543]), nbi_win=[.45, .478], arc_iv=False)
 	plt.show()
 	
 	# for sh in np.arange(509113,509340):
