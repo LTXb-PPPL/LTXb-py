@@ -5,7 +5,7 @@ import numpy as np
 def tabulated_eimpact_ionization(Eb, Te, plot=False):
 	# need reference.
 	# convert from keV to eV
-	if type(Eb) is float:
+	if type(Eb) is float or type(Eb) is np.float64:
 		if Eb < 100:
 			print('interpreting {Eb} as {Eb}keV')
 			Eb *= 1000.
@@ -309,7 +309,7 @@ def tabulated_eimpact_ionization(Eb, Te, plot=False):
 
 
 def tabulated_i_ch_ex_ionization(Eb, mb):
-	if type(Eb) is float:
+	if type(Eb) is float or type(Eb) is np.float64:
 		if Eb < 100:
 			print(f'interpreting {Eb} as {Eb}keV')
 			Eb *= 1000.  # kev to ev  SJE 5-8-2014
@@ -341,7 +341,7 @@ def tabulated_i_ch_ex_ionization(Eb, mb):
 
 
 def tabulated_iimpact_ionization(Eb, mb):
-	if type(Eb) is float:
+	if type(Eb) is float or type(Eb) is np.float64:
 		if Eb < 100:
 			print(f'interpreting {Eb} as {Eb}keV')
 			Eb *= 1000.  # kev to ev  SJE 5-8-2014

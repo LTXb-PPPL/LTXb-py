@@ -4,7 +4,7 @@ import numpy as np
 from matplotlib import ticker
 from helpful_stuff import read_eqdsk, ltx_limiter, read_nenite
 from npa.ionization_cross_sections import *
-from scipy.interpolate import griddata
+from scipy.interpolate import griddata, RegularGridInterpolator
 import pickle
 import os
 
@@ -27,30 +27,49 @@ Include viewing limitations: not all bmvol are able to emit onto detector
 program in the sign convention for pitch
 '''
 
+# todo: use actual neutral halo data from TRANSP instead
+# todo: NEED TO include rotation of transp halo data to account for generic placement of NPA
+# WLOG set beam source at X=0, aiming defined by tangency radius
+beamtan = .213  # [m] (tangency radius of beam: RTCENA in TR.DAT)
+beamsrc_to_tan = 2.57  # [m] (dist from beam source to tangency radius: XLBTNA in TR.DAT)
+xsrc, ysrc = 0, np.sqrt(beamtan ** 2 + beamsrc_to_tan ** 2)
+phi_src = np.arctan2(beamtan, beamsrc_to_tan)  # angle between src-machinecenter and beam-centerline
+
 
 def get_neutral_density(x_bmvol, y_bmvol, z_bmvol, neut_halo):
-	# WLOG set beam source at X=0, aiming defined by tangency radius
-	beamtan = 21.3  # cm
-	
-	
-	# todo: use actual neutral halo data from TRANSP instead
-	# todo: NEED TO include rotation of transp halo data to account for generic placement of NPA
-	
-	return 1.e9  # [#/cm^3]
+	# bmvol in [m] so convert xsrc, ysrc below
+	r_pt2src = np.sqrt((xsrc * 1.e-2 - x_bmvol) ** 2 + (ysrc * 1.e-2 - y_bmvol) ** 2)
+	phi_pt2src = np.arctan2(xsrc - x_bmvol, ysrc - y_bmvol)
+	# compute transform of bmvol elements into box coords (x,y,z)->(x,l,y)
+	# note bmvol-z = box-y
+	# bb denotes .b.mvol element in .b.ox coords
+	x_bb = r_pt2src * np.sin(phi_pt2src)
+	y_bb = z_bmvol
+	l_bb = r_pt2src * np.cos(phi_pt2src)
+	# return 1.e9  # [#/cm^3]
+	if min(neut_halo.lbox) <= l_bb <= max(neut_halo.lbox) and min(neut_halo.ybox) <= y_bb <= max(
+			neut_halo.ybox) and min(neut_halo.xbox) <= x_bb <= max(neut_halo.xbox):
+		return fneut([l_bb, y_bb, x_bb])[0]
+	else:
+		return 1.  # sets background neutral density  (#/cm^3)
 
-
-# fn = '//samba/wcapecch/transp/t111539/111539F04_fi_3.cdf'
-
-# 100002F01 = 10ms 16keV 35A beam into 120kA Ip recon of 100981 @ 468ms eqdsk
-# time points 1-5 at 0, 2.5, 5, 7.5, 10, 12.5ms (beam on at 0ms)
 
 # Normal LTX ops is ip=cw, bt=ccw
 ip_shouldbe_cw = True
 bt_shouldbe_cw = False
 
+# 100002F01 = 10ms 16keV 35A beam into 120kA Ip recon of 100981 @ 468ms eqdsk
+# time points 1-5 at 0, 2.5, 5, 7.5, 10, 12.5ms (beam on at 0ms)
 fbm_fn = '//samba/wcapecch/transp/t100002/100002F01_fi_4.cdf'
 n0_fn = '//samba/wcapecch/transp/t103617/103617C01_boxn0_4.cdf'
 neut_halo = Halo3D(n0_fn)
+# only 1 beam box- remove extra dimension
+neut_halo.boxn0 = neut_halo.boxn0[:, :, :, 0]
+neut_halo.boxn0h0 = neut_halo.boxn0h0[:, :, :, 0]
+neut_halo.boxn0hh = neut_halo.boxn0hh[:, :, :, 0]
+neut_halo.total_neut = neut_halo.boxn0 + neut_halo.boxn0h0 + neut_halo.boxn0hh  # beam + 0 gen + higher gen neutrals (#/cm^3)
+fneut = RegularGridInterpolator((neut_halo.lbox, neut_halo.ybox, neut_halo.xbox), neut_halo.total_neut)
+
 eqdsk_fn = '//samba/wcapecch/datasets/LTX_100981_468-1_5.eqdsk'
 eq = read_eqdsk(eqdsk_fn)
 nenite_fn = '//samba/wcapecch/datasets/LTX_100981_468-1_5.nenite'
@@ -96,14 +115,14 @@ magax3.plot(rlimiter, zlimiter, 'k')
 magax3.set_title('B_tor')
 
 # fbm has indices of [bmvol, pitch, energy]
-if os.path.exists(fbm_fn.split('.')[0] + '.p'):  # pickled file exists, try loading this (might be faster)
+if os.path.exists(fbm_fn.split('.')[0] + '.pkl'):  # pickled file exists, try loading this (might be faster)
 	print('loading pickle file')
-	fbm = pickle.load(open(fbm_fn.split('.')[0] + '.p', 'rb'))
+	fbm = pickle.load(open(fbm_fn.split('.')[0] + '.pkl', 'rb'))
 else:
 	print('no pickle file yet')
 	fbm = FBM(fbm_fn)
 	print('creating pickle file for later')
-	pickle.dump(fbm, open(fbm_fn.split('.')[0] + '.p'))
+	pickle.dump(fbm, open(fbm_fn.split('.')[0] + '.pkl', 'wb'))
 	print('done pickling')
 
 # divide up toroidally (np.sum(bmvol) gives volume of torus)
@@ -168,10 +187,11 @@ for k in np.arange(len(psi_fbmgrid)):
 f = np.linspace(0, 1, endpoint=True)
 print('computing emissivity [num/sec/m^2] onto detector per bin vs energy')
 for iphi in np.arange(nphi_tor):
-	print(iphi, end=' ')
+	print(f'{iphi+1}'.zfill(2), end=' ' if iphi % 25 != 0 else '\n')
 	for k in np.arange(len(fbm.bmvol)):
-		r_bmvol, z_bmvol = fbm.r2d[k] * 1.e-2, fbm.z2d[k] * 1.e-2
-		x_bmvol, y_bmvol = -fbm.r2d[k] * 1.e-2 * np.sin(phi_bins[iphi]), fbm.r2d[k] * 1.e-2 * np.cos(phi_bins[iphi])
+		r_bmvol, z_bmvol = fbm.r2d[k] * 1.e-2, fbm.z2d[k] * 1.e-2  # [m]
+		x_bmvol, y_bmvol = -fbm.r2d[k] * 1.e-2 * np.sin(phi_bins[iphi]), fbm.r2d[k] * 1.e-2 * np.cos(
+			phi_bins[iphi])  # [m]
 		rx, ry, rz = x_det - x_bmvol, y_det - y_bmvol, z_det - z_bmvol
 		r_mag = np.sqrt(rx ** 2 + ry ** 2 + rz ** 2)
 		
