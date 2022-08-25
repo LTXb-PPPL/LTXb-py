@@ -1,3 +1,6 @@
+import datetime
+from datetime import date
+
 from transp_code.transp_classes import Halo3D, FBM
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,17 +13,16 @@ import os
 
 '''
 TODO:
-Final step will be to define viewing aperture on detector view plot, then sum over window to get predicted flux
-Include neutral density to compute emissivity
+define viewing aperture on detector view plot, then sum over window to get predicted flux and energy distribution
+use NPA instrument function to predict current per detector
 Use neutral density to calculate attenuation
 
 THOUGHTS:
--f_neutralize: Assume some neutral profile for now, and calculate neutralization fraction the same way I calculate it
- when modeling beam injection in POET
 -f_reionized: Compute re-ionization fraction along path to detector (adjust # pts by distance to get a pt every cm or so)
  the same way I do in POET
 
 DONE:
+Include neutral density to compute emissivity
 Include cross section data
 Pull actual B field data (don't assume purely toroidal field)
 Include viewing limitations: not all bmvol are able to emit onto detector
@@ -30,22 +32,23 @@ program in the sign convention for pitch
 # todo: use actual neutral halo data from TRANSP instead
 # todo: NEED TO include rotation of transp halo data to account for generic placement of NPA
 # WLOG set beam source at X=0, aiming defined by tangency radius
-beamtan = .213  # [m] (tangency radius of beam: RTCENA in TR.DAT)
-beamsrc_to_tan = 2.57  # [m] (dist from beam source to tangency radius: XLBTNA in TR.DAT)
+beamtan = 21.3  # [cm] (tangency radius of beam: RTCENA in TR.DAT)
+beamsrc_to_tan = 257.  # [cm] (dist from beam source to tangency radius: XLBTNA in TR.DAT)
 xsrc, ysrc = 0, np.sqrt(beamtan ** 2 + beamsrc_to_tan ** 2)
 phi_src = np.arctan2(beamtan, beamsrc_to_tan)  # angle between src-machinecenter and beam-centerline
 
 
 def get_neutral_density(x_bmvol, y_bmvol, z_bmvol, neut_halo):
-	# bmvol in [m] so convert xsrc, ysrc below
-	r_pt2src = np.sqrt((xsrc * 1.e-2 - x_bmvol) ** 2 + (ysrc * 1.e-2 - y_bmvol) ** 2)
-	phi_pt2src = np.arctan2(xsrc - x_bmvol, ysrc - y_bmvol)
+	# mixing units here- all neut stuff in [cm] so convert bmvol from [m]->[cm]
+	xbm, ybm, zbm = x_bmvol*1.e2, y_bmvol*1.e2, z_bmvol*1.e2
+	r_pt2src = np.sqrt((xsrc - xbm) ** 2 + (ysrc - ybm) ** 2)
+	phi_pt2src = np.arctan2(xsrc - xbm, ysrc - ybm)
 	# compute transform of bmvol elements into box coords (x,y,z)->(x,l,y)
-	# note bmvol-z = box-y
+	# note bmvol_z = box_y
 	# bb denotes .b.mvol element in .b.ox coords
-	x_bb = r_pt2src * np.sin(phi_pt2src)
-	y_bb = z_bmvol
-	l_bb = r_pt2src * np.cos(phi_pt2src)
+	x_bb = r_pt2src * np.sin(phi_pt2src + phi_src)
+	y_bb = zbm
+	l_bb = r_pt2src * np.cos(phi_pt2src + phi_src)
 	# return 1.e9  # [#/cm^3]
 	if min(neut_halo.lbox) <= l_bb <= max(neut_halo.lbox) and min(neut_halo.ybox) <= y_bb <= max(
 			neut_halo.ybox) and min(neut_halo.xbox) <= x_bb <= max(neut_halo.xbox):
@@ -116,14 +119,18 @@ magax3.set_title('B_tor')
 
 # fbm has indices of [bmvol, pitch, energy]
 if os.path.exists(fbm_fn.split('.')[0] + '.pkl'):  # pickled file exists, try loading this (might be faster)
-	print('loading pickle file')
+	print('loading pickle file', end='')
+	t1 = datetime.datetime.now()
 	fbm = pickle.load(open(fbm_fn.split('.')[0] + '.pkl', 'rb'))
+	t2 = datetime.datetime.now()
+	print(f'... {(t2 - t1).seconds} sec')
 else:
-	print('no pickle file yet')
+	print('no pickle file yet, creating one for later', end='')
+	t1 = datetime.datetime.now()
 	fbm = FBM(fbm_fn)
-	print('creating pickle file for later')
 	pickle.dump(fbm, open(fbm_fn.split('.')[0] + '.pkl', 'wb'))
-	print('done pickling')
+	t2 = datetime.datetime.now()
+	print(f'... {(t2 - t1).seconds} sec')
 
 # divide up toroidally (np.sum(bmvol) gives volume of torus)
 nphi_tor = 100  # number of phi bins
@@ -140,7 +147,7 @@ mp = 1.672e-27  # proton mass [kg]
 me = 9.109e-31  # electron mass [kg]
 ee = 1.60218e-19  # charge [C]
 
-emissiv_1m = np.zeros_like(fbm.fbm[:, :, :])  # bmvol vs pitch, need energy axis since attenuation depends on energy
+emissiv = np.zeros_like(fbm.fbm[:, :, :])  # bmvol vs pitch, need energy axis since attenuation depends on energy
 de_arr = [fbm.energy[e + 1] - fbm.energy[e] for e in np.arange(len(fbm.energy) - 1)]  # step size in energy array [eV]
 if max(de_arr) - min(de_arr) > 1:  # diff in de > 1eV: stop
 	raise ValueError('energy array on irregular grid')
@@ -151,19 +158,18 @@ sigv_cx_cm3_s = tabulated_i_ch_ex_ionization(fbm.energy, 1.)  # [cm^3/s]
 print('computing emissivity of poloidal bmvols: num/sec when multiplied by n0 in #/cm^3')
 for p in np.arange(len(fbm.pitch) - 1):
 	for k in np.arange(len(fbm.bmvol)):
-		dtheta = abs(np.arccos(pitch_bin_limits[p]) - np.arccos(pitch_bin_limits[p + 1]))
-		theta_av = (np.arccos(pitch_bin_limits[p]) + np.arccos(pitch_bin_limits[p + 1])) / 2.
-		# n0 = get_neutral_density(x_bmvol, y_bmvol, z_bmvol)  # [num/m^3]
+		# dtheta = abs(np.arccos(pitch_bin_limits[p]) - np.arccos(pitch_bin_limits[p + 1]))
+		# theta_av = (np.arccos(pitch_bin_limits[p]) + np.arccos(pitch_bin_limits[p + 1])) / 2.
+		# n0 = get_neutral_density(x_bmvol, y_bmvol, z_bmvol)  # [num/m^3] don't do this here- only doing cross section
 		# v_elec = np.sqrt(2. * ee * te_fbmgrid[k] / me)
 		# sigv_ei = tabulated_eimpact_ionization(fbm.energy, te_fbmgrid[k])  # [cm^3/s]
 		v_ion_m_s = np.sqrt(2. * ee * fbm.energy / mp)  # m/s speed of ion
 		# fbm has indices of [bmvol, pitch, energy]
 		Ni_vs_energy = fbm.fbm[k, p, :] * fbm.bmvol[k] * de / len(fbm.pitch)  # [num at this pitch p in this bmvol k]
 		num_sec_per_n0 = Ni_vs_energy * sigv_cx_cm3_s  # [num/sec when multiplied by n0 in #/cm^3]
-		a_annulus_type_thing = 2. * np.pi * dtheta * np.sin(theta_av)  # area of surf between pitch bin limits at R=1m
-		emissiv_1m[k, p, :] = num_sec_per_n0 / a_annulus_type_thing
-# if k == 167 and p == 37:
-# 	a=1
+		# a_annulus_type_thing = 2. * np.pi * dtheta * np.sin(theta_av)  # area of surf between pitch bin limits at R=1m
+		# DON'T divide by annulus- keep as rate of emission per n0
+		emissiv[k, p, :] = num_sec_per_n0  # / a_annulus_type_thing
 
 # emissivity, det_phi, and det_theta for each bmvol element at each phi location
 emissiv_det = np.zeros((len(fbm.bmvol), nphi_tor, len(fbm.energy)))
@@ -187,7 +193,8 @@ for k in np.arange(len(psi_fbmgrid)):
 f = np.linspace(0, 1, endpoint=True)
 print('computing emissivity [num/sec/m^2] onto detector per bin vs energy')
 for iphi in np.arange(nphi_tor):
-	print(f'{iphi+1}'.zfill(2), end=' ' if iphi % 25 != 0 else '\n')
+	print(f'{iphi + 1}'.zfill(2), end=' ' if (iphi + 1) % 25 != 0 else '\n')
+	# print(f'{phi_bins[iphi]*180/np.pi:.5}', end=' ' if (iphi + 1) % 25 != 0 else '\n')
 	for k in np.arange(len(fbm.bmvol)):
 		r_bmvol, z_bmvol = fbm.r2d[k] * 1.e-2, fbm.z2d[k] * 1.e-2  # [m]
 		x_bmvol, y_bmvol = -fbm.r2d[k] * 1.e-2 * np.sin(phi_bins[iphi]), fbm.r2d[k] * 1.e-2 * np.cos(
@@ -218,7 +225,7 @@ for iphi in np.arange(nphi_tor):
 			pitch_det = sign_convention * (rx * bx + ry * by + rz * bz) / r_mag / b_mag
 			
 			n0 = get_neutral_density(x_bmvol, y_bmvol, z_bmvol, neut_halo)  # [num/cm^3]
-			emiss = emissiv_1m[k, :, :] * n0  # [num/sec]
+			emiss = emissiv[k, :, :] * n0  # [num/sec]
 			em_det = np.zeros_like(fbm.energy)  # [num/sec/m^2]
 			for ie in np.arange(len(fbm.energy)):
 				em_det[ie] = np.interp(pitch_det, fbm.pitch,
@@ -303,19 +310,41 @@ rr_bins = np.linspace(0, .7, endpoint=True, num=nr + 1)
 rr = np.linspace(0, .7, endpoint=False, num=nr) + .7 / 50 / 2.
 r2, p2 = np.meshgrid(rr, phi_bin_limits + dphi)
 
-# top down view of emissivity/m^2 summed over all pitch
+# top down view of emissivity summed over all pitch
+# fig3, ax3 = plt.subplots(subplot_kw=dict(projection='polar'))
+# e1 = np.zeros((nphi_tor, len(rr)))
+# for iph in np.arange(nphi_tor):
+# 	for ir in np.arange(len(rr)):
+# 		e1[iph, ir] = np.sum(emissiv[np.where(
+# 			(fbm.r2d * 1.e-2 > rr_bins[ir]) & (fbm.r2d * 1.e-2 < rr_bins[ir + 1])
+# 		), :])
+# e1 = np.vstack([e1, e1[0, :]])
+# e1 = np.ma.masked_where(e1 <= 0, e1)
+# cb3 = ax3.contourf(p2, r2, e1, locator=ticker.LogLocator())
+# cbar3 = fig3.colorbar(cb3)
+# cbar3.set_label('num/sec')
+
+# plot of 3d Halo Neutral Density
 fig3, ax3 = plt.subplots(subplot_kw=dict(projection='polar'))
-e1 = np.zeros((nphi_tor, len(rr)))
-for iph in np.arange(nphi_tor):
-	for ir in np.arange(len(rr)):
-		e1[iph, ir] = np.sum(emissiv_1m[np.where(
-			(fbm.r2d * 1.e-2 > rr_bins[ir]) & (fbm.r2d * 1.e-2 < rr_bins[ir + 1])
-		), :])
-e1 = np.vstack([e1, e1[0, :]])
-e1 = np.ma.masked_where(e1 <= 0, e1)
-cb3 = ax3.contourf(p2, r2, e1, locator=ticker.LogLocator())
+n0tot = neut_halo.total_neut[:, :, :]
+n0tot_mp = np.sum(n0tot, axis=1)  # sum over vertical coord
+xbox, lbox = neut_halo.xbox, neut_halo.lbox
+x_bb, y_bb = np.meshgrid(xbox, lbox)
+r_bb, phi_bb = np.zeros_like(x_bb), np.zeros_like(x_bb)
+for ix in np.arange(len(xbox)):
+	for il in np.arange(len(lbox)):
+		x_bb[il, ix] = xsrc + lbox[il] * np.sin(phi_src) - xbox[ix] * np.cos(phi_src)
+		y_bb[il, ix] = ysrc - lbox[il] * np.cos(phi_src) - xbox[ix] * np.sin(phi_src)
+		r_bb[il, ix] = np.sqrt(x_bb[il, ix] ** 2 + y_bb[il, ix] ** 2)
+		phi_bb[il, ix] = np.arctan2(-x_bb[il, ix], y_bb[il, ix])  # neg here to get NB injecting co-Ip
+# all neut stuff in [cm], convert to [m] to be consistent w/other plot
+r_bb *= 1.e-2
+cb3 = ax3.contourf(phi_bb, r_bb, n0tot_mp, levels=25)
 cbar3 = fig3.colorbar(cb3)
-cbar3.set_label('num/sec/m^2')
+cbar3.set_label('#/cm^3 (summed over vertical coord)')
+ax3.set_rlim((0, .75))
+ax3.set_theta_zero_location('N')
+ax3.set_title('beam neutral halo')
 
 # top down view of emissivity reaching detector
 em_top = np.zeros((nphi_tor + 1, len(rr)))
@@ -334,6 +363,8 @@ cb2 = ax2.contourf(p2, r2, em_top, locator=ticker.LogLocator())
 cbar2 = fig2.colorbar(cb2)
 cbar2.set_label('num/sec/m^2')
 ax2.plot(phi_det, r_det, 'ro')
-ax2.annotate('detector', (phi_det, r_det), xytext=(.1, .7), textcoords='figure fraction',
+ax2.annotate('detector', (phi_det, r_det), xytext=(.7, -.9), textcoords='figure fraction',
              arrowprops=dict(facecolor='r', shrink=.05))
+ax2.set_theta_zero_location('N')
+
 plt.show()

@@ -129,7 +129,7 @@ class FBM:
 
 class Halo3D:
 	def __init__(self, cdf_file, label=None):
-		print(f'Reading in {cdf_file}... be patient')
+		print(f'Reading in {cdf_file}... be patient', end='')
 		tstrt = datetime.datetime.now()
 		cdf = netcdf.netcdf_file(cdf_file, 'r', mmap=False)
 		vars = cdf.variables
@@ -169,9 +169,9 @@ class Halo3D:
 		self.n0_vs_lbox = np.sum(self.boxn0[:, :, :, 0], axis=(1, 2))  # sum over x, y  #/cm^3 vs lbox
 		self.num_vs_lbox = self.n0_vs_lbox * self.dv  # num vs lbox
 		cdf.close()
-		print('N0_tot = {:.4e}'.format(np.sum(self.num_vs_lbox)))
+		# print('N0_tot = {:.4e}'.format(np.sum(self.num_vs_lbox)))
 		tstp = datetime.datetime.now()
-		print(f'Halo neutral CDF load time {(tstp - tstrt).seconds} sec')
+		print(f'- load time {(tstp - tstrt).seconds} sec, N0_tot = {np.sum(self.num_vs_lbox):.4e}')
 	
 	def plot(self, xslice=None, yslice=None, lslice=None, label=None, nbeam=1):
 		nplots = 1
