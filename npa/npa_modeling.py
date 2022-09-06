@@ -11,26 +11,34 @@ from scipy.interpolate import griddata, RegularGridInterpolator
 import pickle
 import os
 
+# todo: why is em2d empty with phi_det_degree = 170.?
 '''
 TODO:
+Compute fast ion distribution and neutral halo for rtan=21.3, 24, 33cm to compare energy distribution of NPA signal
+ALL emissivity is evaluated over grid in theta/phi or x/y- need to convert num/sec/m^2 to num/sec/m^2/sr
+	-should be easy on detector view plot: dtheta and dphi map to a specific sr value
+	-similar on top view plot, we're scanning in phi/theta
+I think this is only CX- incorporate II and IE impact ionization
 define viewing aperture on detector view plot, then sum over window to get predicted flux and energy distribution
 use NPA instrument function to predict current per detector
-Use neutral density to calculate attenuation
 
 THOUGHTS:
--f_reionized: Compute re-ionization fraction along path to detector (adjust # pts by distance to get a pt every cm or so)
- the same way I do in POET
 
 DONE:
+f_reionized: Compute re-ionization fraction along path to detector
+Use neutral density to calculate attenuation (?)
 Include neutral density to compute emissivity
 Include cross section data
 Pull actual B field data (don't assume purely toroidal field)
 Include viewing limitations: not all bmvol are able to emit onto detector
 program in the sign convention for pitch
 '''
+# NPA detector position
+r_det, phi_det_degree, z_det = .8, 190., 0.
+# r_det, phi_det_degree, z_det = .5, 190., .4
+x_det, y_det = -r_det * np.sin(phi_det_degree * np.pi / 180.), r_det * np.cos(phi_det_degree * np.pi / 180.)
+phi_det2machinecenter = np.arctan2(-x_det, y_det) + np.pi  # angle from det to machine center
 
-# todo: use actual neutral halo data from TRANSP instead
-# todo: NEED TO include rotation of transp halo data to account for generic placement of NPA
 # WLOG set beam source at X=0, aiming defined by tangency radius
 beamtan = 21.3  # [cm] (tangency radius of beam: RTCENA in TR.DAT)
 beamsrc_to_tan = 257.  # [cm] (dist from beam source to tangency radius: XLBTNA in TR.DAT)
@@ -40,7 +48,7 @@ phi_src = np.arctan2(beamtan, beamsrc_to_tan)  # angle between src-machinecenter
 
 def get_neutral_density(x_bmvol, y_bmvol, z_bmvol, neut_halo):
 	# mixing units here- all neut stuff in [cm] so convert bmvol from [m]->[cm]
-	xbm, ybm, zbm = x_bmvol*1.e2, y_bmvol*1.e2, z_bmvol*1.e2
+	xbm, ybm, zbm = x_bmvol * 1.e2, y_bmvol * 1.e2, z_bmvol * 1.e2
 	r_pt2src = np.sqrt((xsrc - xbm) ** 2 + (ysrc - ybm) ** 2)
 	phi_pt2src = np.arctan2(xsrc - xbm, ysrc - ybm)
 	# compute transform of bmvol elements into box coords (x,y,z)->(x,l,y)
@@ -49,12 +57,11 @@ def get_neutral_density(x_bmvol, y_bmvol, z_bmvol, neut_halo):
 	x_bb = r_pt2src * np.sin(phi_pt2src + phi_src)
 	y_bb = zbm
 	l_bb = r_pt2src * np.cos(phi_pt2src + phi_src)
-	# return 1.e9  # [#/cm^3]
 	if min(neut_halo.lbox) <= l_bb <= max(neut_halo.lbox) and min(neut_halo.ybox) <= y_bb <= max(
 			neut_halo.ybox) and min(neut_halo.xbox) <= x_bb <= max(neut_halo.xbox):
 		return fneut([l_bb, y_bb, x_bb])[0]
 	else:
-		return 1.  # sets background neutral density  (#/cm^3)
+		return 1.e9  # sets background neutral density  (#/cm^3)
 
 
 # Normal LTX ops is ip=cw, bt=ccw
@@ -104,18 +111,20 @@ if eq['bt_is_cw'] != bt_shouldbe_cw:
 
 rz_pts = np.append(eq_r2d.reshape((len(eq_r2d.flatten()), 1)), eq_z2d.reshape((len(eq_z2d.flatten()), 1)), axis=1)
 
-magfig, (magax1, magax2, magax3) = plt.subplots(ncols=3, sharey=True)
-magax1.contourf(eq_r2d, eq_z2d, np.ma.masked_where(rminor_xy > r_interp, br2d))
-magax1.plot(rlimiter, zlimiter, 'k')
-magax1.set_title('Br')
-magax1.set_xlabel('R (m)')
-magax1.set_ylabel('Z (m)')
-magax2.contourf(eq_r2d, eq_z2d, np.ma.masked_where(rminor_xy > r_interp, bz2d))
-magax2.plot(rlimiter, zlimiter, 'k')
-magax2.set_title('Bz')
-magax3.contourf(eq_r2d, eq_z2d, np.ma.masked_where(rminor_xy > r_interp, bphi2d))
-magax3.plot(rlimiter, zlimiter, 'k')
-magax3.set_title('B_tor')
+plot_mag = False
+if plot_mag:
+	magfig, (magax1, magax2, magax3) = plt.subplots(ncols=3, sharey=True)
+	magax1.contourf(eq_r2d, eq_z2d, np.ma.masked_where(rminor_xy > r_interp, br2d))
+	magax1.plot(rlimiter, zlimiter, 'k')
+	magax1.set_title('Br')
+	magax1.set_xlabel('R (m)')
+	magax1.set_ylabel('Z (m)')
+	magax2.contourf(eq_r2d, eq_z2d, np.ma.masked_where(rminor_xy > r_interp, bz2d))
+	magax2.plot(rlimiter, zlimiter, 'k')
+	magax2.set_title('Bz')
+	magax3.contourf(eq_r2d, eq_z2d, np.ma.masked_where(rminor_xy > r_interp, bphi2d))
+	magax3.plot(rlimiter, zlimiter, 'k')
+	magax3.set_title('B_tor')
 
 # fbm has indices of [bmvol, pitch, energy]
 if os.path.exists(fbm_fn.split('.')[0] + '.pkl'):  # pickled file exists, try loading this (might be faster)
@@ -167,16 +176,11 @@ for p in np.arange(len(fbm.pitch) - 1):
 		# fbm has indices of [bmvol, pitch, energy]
 		Ni_vs_energy = fbm.fbm[k, p, :] * fbm.bmvol[k] * de / len(fbm.pitch)  # [num at this pitch p in this bmvol k]
 		num_sec_per_n0 = Ni_vs_energy * sigv_cx_cm3_s  # [num/sec when multiplied by n0 in #/cm^3]
-		# a_annulus_type_thing = 2. * np.pi * dtheta * np.sin(theta_av)  # area of surf between pitch bin limits at R=1m
-		# DON'T divide by annulus- keep as rate of emission per n0
-		emissiv[k, p, :] = num_sec_per_n0  # / a_annulus_type_thing
+		emissiv[k, p, :] = num_sec_per_n0
 
-# emissivity, det_phi, and det_theta for each bmvol element at each phi location
 emissiv_det = np.zeros((len(fbm.bmvol), nphi_tor, len(fbm.energy)))
 det_phi_theta_rmag = np.zeros((len(fbm.bmvol), nphi_tor, 3))
 
-r_det, z_det = .7, 0.
-x_det, y_det = 0., -r_det  # WLOG if we have toroidal symmetry
 # get br, bz, bphi onto fbm grid
 fbm_rz_pts = np.append(fbm.r2d.reshape((len(fbm.r2d), 1)), fbm.z2d.reshape((len(fbm.z2d), 1)), axis=1) * 1.e-2
 br_fbmgrid = griddata(rz_pts, br2d.flatten(), fbm_rz_pts)
@@ -231,28 +235,33 @@ for iphi in np.arange(nphi_tor):
 				em_det[ie] = np.interp(pitch_det, fbm.pitch,
 				                       emiss[:, ie]) / r_mag ** 2  # flux falls of as 1/r^2 from bmvol element
 		
-		# detector viewing angles:
-		det_phi = np.arctan(-rx / -ry)
-		det_theta = np.arcsin(-rz / r_mag)
+		# viewing angles from detector to bmvol element:
+		# det_phi = np.arctan(-rx / -ry)  # MIDPLANE ANGLE
+		det_phi = np.arctan2(-rx, -ry)  # angle from det to bmvol element using phi=0=North coords
+		det_phi += phi_det2machinecenter  # angle from det to bmvol element relative to machinecenter
+		det_theta = np.arcsin(-rz / r_mag)  # VERTICAL ANGLE
 		emissiv_det[k, iphi, :] = em_det
 		det_phi_theta_rmag[k, iphi, :] = [det_phi, det_theta, r_mag]
 
-print('')
-nph, nth = 50, 50
-phi_det_bins = np.linspace(-np.pi / 2., np.pi / 2., endpoint=True, num=nph + 1)
+print('analyzing all bmvol elements from detector view', end='')
+t1 = datetime.datetime.now()
+nph, nth = 99, 51
+phi_det_bins = np.linspace(-np.pi, np.pi, endpoint=True, num=nph + 1)  # MIDPLANE ANGLE
 phi_det_cntr = phi_det_bins[0:-1] + (phi_det_bins[1] - phi_det_bins[0]) / 2.
-theta_det_bins = np.linspace(-np.pi, np.pi, endpoint=True, num=nth + 1)
+theta_det_bins = np.linspace(-np.pi / 2., np.pi / 2., endpoint=True, num=nth + 1)  # VERTICAL ANGLE
 theta_det_cntr = theta_det_bins[0:-1] + (theta_det_bins[1] - theta_det_bins[0]) / 2.
 em2d = np.zeros((nph, nth))
-print('analyzing bmvol elements from detector view')
 for iph in np.arange(nph):  # emissiv_det = [bmvol, iphi, energy]
 	for ith in np.arange(nth):
 		# define path from det outward given angles phi, theta
 		# get pts every cm or so along path from det out 2 meters
 		r_ep = 2.  # set 2m length (long compared to LTX, ensuring we cover all bmvol elements)
-		z_endpt = r_ep * np.sin(theta_det_cntr[ith])
+		z_endpt = r_ep * np.sin(theta_det_cntr[ith])  # THETA VERTICAL ANGLE
 		xy_endpt = r_ep * np.cos(theta_det_cntr[ith])
-		x_endpt, y_endpt = xy_endpt * np.sin(phi_det_cntr[iph]), xy_endpt * np.cos(phi_det_cntr[iph])
+		# x_endpt, y_endpt = xy_endpt * np.sin(phi_det_cntr[iph]), xy_endpt * np.cos(
+		# 	phi_det_cntr[iph])
+		x_endpt = x_det + xy_endpt * np.sin(phi_det_cntr[iph])
+		y_endpt = y_det + xy_endpt * np.cos(phi_det_cntr[iph])  # PHI MIDPLANE ANGLE
 		
 		xpath = np.linspace(x_det, x_endpt, endpoint=False, num=int(r_ep * 100.))
 		ypath = np.linspace(y_det, y_endpt, endpoint=False, num=int(r_ep * 100.))
@@ -287,42 +296,125 @@ for iph in np.arange(nph):  # emissiv_det = [bmvol, iphi, energy]
 			r_to_bmvol = det_phi_theta_rmag[iwin[0][ibmvol], iwin[1][ibmvol], 2]
 			iclos = np.where(abs(pts_along - r_to_bmvol) == min(abs(pts_along - r_to_bmvol)))[0][0]
 			em_sum += np.sum(frac_trans[iclos, :] * emiss_v_energy)
-		em2d[iph, ith] = em_sum
+		em2d[iph, ith] = em_sum  # todo: divide by solid angle here given dphi&dtheta
+t2 = datetime.datetime.now()
+print(f'... {(t2 - t1).seconds} sec')
+
+print(f'computing flux through detector aperture', end='')
+t1 = datetime.datetime.now()
+imax = np.where(em2d == em2d.max())
+aperture_phi0, aperture_theta0 = phi_det_cntr[imax[0][0]], theta_det_cntr[imax[1][0]]
+aperture_radius = 5  # [cm]
+apterture_target_dist = 50  # [cm] (these are guesses for now)
+det_acceptance_angle = np.arctan2(aperture_radius, apterture_target_dist)
+pcirc = np.linspace(0, 2. * np.pi, endpoint=True)
+xcirc, ycirc = aperture_radius * np.cos(pcirc), aperture_radius * np.sin(pcirc)
+phicirc = aperture_phi0 + np.arctan2(xcirc, apterture_target_dist)
+thetacirc = aperture_theta0 + np.arctan2(ycirc, apterture_target_dist)
+
+nphaper, nthaper = 25, 26
+nswing = 11
+phi_swing = np.linspace(-10, 10, endpoint=True, num=nswing) * np.pi / 180.
+em_swing = np.zeros((nswing, len(fbm.energy)))
+for isw in np.arange(nswing):
+	print(f'{isw+1}', end=' ')
+	phi_detaper_bins = np.linspace(aperture_phi0 - det_acceptance_angle + phi_swing[isw],
+	                               aperture_phi0 + det_acceptance_angle + phi_swing[isw],
+	                               endpoint=True, num=nphaper + 1)
+	phi_detaper_cntr = phi_detaper_bins[0:-1] + (phi_detaper_bins[1] - phi_detaper_bins[0]) / 2.
+	theta_detaper_bins = np.linspace(aperture_theta0 - det_acceptance_angle, aperture_theta0 + det_acceptance_angle,
+	                                 endpoint=True, num=nthaper + 1)
+	theta_detaper_cntr = theta_detaper_bins[0:-1] + (theta_detaper_bins[1] - theta_detaper_bins[0]) / 2.
+	em2d_aper = np.zeros((nphaper, nthaper, len(fbm.energy)))  # keep energy distribution here?
+	for iph in np.arange(nphaper):  # emissiv_det = [bmvol, iphi, energy]
+		for ith in np.arange(nthaper):
+			rcheck = np.sqrt(
+				(apterture_target_dist * np.tan(phi_detaper_cntr[iph] - aperture_phi0 - phi_swing[isw])) ** 2 + (
+						apterture_target_dist * np.tan(theta_detaper_cntr[ith] - aperture_theta0)) ** 2)
+			if rcheck > aperture_radius:  # point is outside aperture viewing, omit
+				em2d_aper[iph, ith, :] = 0.
+			else:
+				# define path from det outward given angles phi, theta
+				# get pts every cm or so along path from det out 2 meters
+				r_ep = 2.  # set 2m length (long compared to LTX, ensuring we cover all bmvol elements)
+				z_endpt = r_ep * np.sin(theta_detaper_cntr[ith])  # THETA VERTICAL ANGLE
+				xy_endpt = r_ep * np.cos(theta_detaper_cntr[ith])
+				x_endpt = x_det + xy_endpt * np.sin(phi_detaper_cntr[iph])
+				y_endpt = y_det + xy_endpt * np.cos(phi_detaper_cntr[iph])
+				
+				xpath = np.linspace(x_det, x_endpt, endpoint=False, num=int(r_ep * 100.))
+				ypath = np.linspace(y_det, y_endpt, endpoint=False, num=int(r_ep * 100.))
+				zpath = np.linspace(z_det, z_endpt, endpoint=False, num=int(r_ep * 100.))
+				pts_along = np.linspace(0, r_ep, endpoint=False, num=int(r_ep * 100.))
+				dx = np.sqrt((xpath[1] - xpath[0]) ** 2 + (ypath[1] - ypath[0]) ** 2 + (zpath[1] - zpath[0]) ** 2)
+				rpath = np.sqrt(xpath ** 2 + ypath ** 2)
+				phipath = np.arctan(-xpath, ypath)
+				rz_path = np.append(rpath.reshape((len(rpath), 1)), zpath.reshape((len(zpath), 1)), axis=1)
+				psi_path = griddata(rz_pts, psi_rz.flatten(), rz_path)
+				ni_path_m3 = np.zeros_like(psi_path)
+				for ipt in np.arange(len(psi_path)):
+					# ne_path_m3[ipt] = np.interp(psi_path[ipt], plflx, ne_m3)
+					ni_path_m3[ipt] = np.interp(psi_path[ipt], plflx, ni_m3)
+				# te_path_ev[ipt] = np.interp(psi_path[ipt], plflx, te_ev)
+				# sigv_ei = tabulated_eimpact_ionization(fbm.energy, te_path)
+				frac_ioniz = np.outer(ni_path_m3, (sigv_cx_cm3_s * 1.e-6) / v_ion_m_s * dx)  # vs position and energy
+				frac_ioniz = np.nan_to_num(frac_ioniz)  # sets nan to 0.
+				frac_trans = 1. - frac_ioniz
+				frac_trans = np.cumprod(frac_trans, axis=0)  # cumulative product along position vector v. energy
+				
+				iwin = np.where(
+					(det_phi_theta_rmag[:, :, 0] >= phi_det_bins[iph]) & \
+					(det_phi_theta_rmag[:, :, 0] < phi_det_bins[iph + 1]) & \
+					(det_phi_theta_rmag[:, :, 1] >= theta_det_bins[ith]) & \
+					(det_phi_theta_rmag[:, :, 1] < theta_det_bins[ith + 1]))
+				
+				em_sum = np.zeros_like(fbm.energy)
+				for ibmvol in np.arange(len(iwin[0])):
+					emiss_v_energy = emissiv_det[iwin[0][ibmvol], iwin[1][ibmvol], :]
+					r_to_bmvol = det_phi_theta_rmag[iwin[0][ibmvol], iwin[1][ibmvol], 2]
+					iclos = np.where(abs(pts_along - r_to_bmvol) == min(abs(pts_along - r_to_bmvol)))[0][0]
+					em_sum += frac_trans[iclos, :] * emiss_v_energy  # keep as array vs energy
+				em2d_aper[iph, ith, :] = em_sum  # array of #/sec/m^2 vs energy  # todo: need to multiply here by solid angle
+	em_v_en = np.nansum(em2d_aper, axis=0)
+	em_v_en = np.nansum(em_v_en, axis=0)
+	em_swing[isw, :] = em_v_en
+t2 = datetime.datetime.now()
+print(f'... {(t2 - t1).seconds} sec')
+
+# create optimal detector alignment array
+ll = np.linspace(0, 1.5)  # pts away from detector
+phi_combined = phi_det2machinecenter - aperture_phi0
+xl, yl = x_det - ll * np.sin(phi_combined), y_det + ll * np.cos(phi_combined)
+phi_detopt, r_detopt = np.arctan2(-xl, yl), np.sqrt(xl ** 2 + yl ** 2)
 
 print('plotting')
+
+# fast-ion distribution plot
+fifig, fiax = plt.subplots(nrows=2)
+fbm.plot(axes=fiax)
+fifig.suptitle('Fast Ion distribution (TRANSP)')
+
 # detector view
 fig, ax = plt.subplots()
 em2d = np.ma.masked_where(em2d <= 0, em2d)
 cb1 = ax.contourf(phi_det_cntr, theta_det_cntr, em2d.transpose(), locator=ticker.LogLocator())
+ax.plot(phicirc, thetacirc, 'k--')
 cbar1 = fig.colorbar(cb1)
-cbar1.set_label('num/sec/m^2')
+cbar1.set_label('num/sec/m^2')  # todo: correct units to include per solid angle
 ax.axvline(0, c='k', ls='--', linewidth=1)
 ax.axhline(0, c='k', ls='--', linewidth=1)
 # ax.spines['left'].set_position('zero')
 ax.spines['right'].set_color('none')
 # ax.spines['bottom'].set_position('zero')
 ax.spines['top'].set_color('none')
-ax.set_xlabel('$\\phi$')
-ax.set_ylabel('$\\theta$')
+ax.set_xlabel('$\\phi$ (midplane angle)')
+ax.set_ylabel('$\\theta$ (vertical angle)')
+ax.axis('equal')
 
 nr = 50
 rr_bins = np.linspace(0, .7, endpoint=True, num=nr + 1)
 rr = np.linspace(0, .7, endpoint=False, num=nr) + .7 / 50 / 2.
 r2, p2 = np.meshgrid(rr, phi_bin_limits + dphi)
-
-# top down view of emissivity summed over all pitch
-# fig3, ax3 = plt.subplots(subplot_kw=dict(projection='polar'))
-# e1 = np.zeros((nphi_tor, len(rr)))
-# for iph in np.arange(nphi_tor):
-# 	for ir in np.arange(len(rr)):
-# 		e1[iph, ir] = np.sum(emissiv[np.where(
-# 			(fbm.r2d * 1.e-2 > rr_bins[ir]) & (fbm.r2d * 1.e-2 < rr_bins[ir + 1])
-# 		), :])
-# e1 = np.vstack([e1, e1[0, :]])
-# e1 = np.ma.masked_where(e1 <= 0, e1)
-# cb3 = ax3.contourf(p2, r2, e1, locator=ticker.LogLocator())
-# cbar3 = fig3.colorbar(cb3)
-# cbar3.set_label('num/sec')
 
 # plot of 3d Halo Neutral Density
 fig3, ax3 = plt.subplots(subplot_kw=dict(projection='polar'))
@@ -340,9 +432,11 @@ for ix in np.arange(len(xbox)):
 # all neut stuff in [cm], convert to [m] to be consistent w/other plot
 r_bb *= 1.e-2
 cb3 = ax3.contourf(phi_bb, r_bb, n0tot_mp, levels=25)
+ax3.plot(phi_detopt, r_detopt, 'r--')
 cbar3 = fig3.colorbar(cb3)
 cbar3.set_label('#/cm^3 (summed over vertical coord)')
-ax3.set_rlim((0, .75))
+rlim = ax3.get_ylim()
+ax3.set_rlim((0, rlim[1]))
 ax3.set_theta_zero_location('N')
 ax3.set_title('beam neutral halo')
 
@@ -360,11 +454,24 @@ fig2, ax2 = plt.subplots(subplot_kw=dict(projection='polar'))
 phi_det = np.arctan2(-x_det, y_det)
 em_top = np.ma.masked_where(em_top <= 0, em_top)
 cb2 = ax2.contourf(p2, r2, em_top, locator=ticker.LogLocator())
+ax2.plot(phi_detopt, r_detopt, 'r--')
 cbar2 = fig2.colorbar(cb2)
-cbar2.set_label('num/sec/m^2')
+cbar2.set_label('num/sec/m^2')  # units correct- no solid angle in this plot, just plotting rate/m^2 onto detector
 ax2.plot(phi_det, r_det, 'ro')
-ax2.annotate('detector', (phi_det, r_det), xytext=(.7, -.9), textcoords='figure fraction',
-             arrowprops=dict(facecolor='r', shrink=.05))
+ax2.annotate('detector', (phi_det, r_det))
 ax2.set_theta_zero_location('N')
 
+fig4, ax4 = plt.subplots()
+# det_flux_v_energy = np.nansum(em2d_aper, axis=0)
+# det_flux_v_energy = np.nansum(det_flux_v_energy, axis=0)
+# ax4.bar(fbm.energy / 1000., det_flux_v_energy, width=.9)
+for isw in np.arange(nswing):
+	ax4.bar(fbm.energy / 1000., em_swing[isw, :], width=.9)
+	phicomb = phi_det2machinecenter - aperture_phi0 + phi_swing[isw]
+	xl, yl = x_det - ll * np.sin(phicomb), y_det + ll * np.cos(phicomb)
+	phi_detopt, r_detopt = np.arctan2(-xl, yl), np.sqrt(xl ** 2 + yl ** 2)
+	ax2.plot(phi_detopt, r_detopt, 'r-.')
+ax4.set_xlim(right=20)
+ax4.set_xlabel('incident ion energy (keV)')
+ax4.set_ylabel('incident flux onto detector (#/sec)')
 plt.show()

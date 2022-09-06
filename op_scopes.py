@@ -411,7 +411,8 @@ if __name__ == '__main__':
 	late = [566,567,568,530] CAUTION- beam late! (TS at 465, 466)
 	weak-start = [603]
 	"""
-	nbi_ops(106000 + np.array([606,554,555,556,551,553,525,538,542,543]), nbi_win=[.45, .478], arc_iv=False)
+	nbi_ops([105795], nbi_win=[.45, .48], arc_iv=False)
+	# nbi_ops(106000 + np.array([606,554,555,556,551,553,525,538,542,543]), nbi_win=[.45, .478], arc_iv=False)
 	plt.show()
 	
 	# for sh in np.arange(509113,509340):

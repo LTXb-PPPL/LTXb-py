@@ -95,10 +95,10 @@ class FBM:
 			fig = plt.figure(self.cdf_file)
 			# plt.suptitle(label)
 			ax1, ax2 = fig.add_subplot(211), fig.add_subplot(212)
-			subplotting = False
+			# subplotting = False
 		else:
 			ax1, ax2 = axes[0], axes[1]
-			subplotting = True
+			# subplotting = True
 		ax1.set_title(label)
 		if r_cm is not None and z_cm is not None:
 			wzones = np.where(
@@ -119,10 +119,10 @@ class FBM:
 		cont = ax1.contourf(self.energy, self.pitch, fbeam.transpose(), locator=ticker.LogLocator(), levels=levels)
 		# cbar = fig.colorbar(cont, ax=ax1)
 		ax2.plot(self.energy, self.n_tot_arr, 'o-')
-		if not subplotting:
-			ax1.set_ylabel('Pitch')
-			ax2.set_xlabel('energy (eV)')
-			ax2.set_ylabel('relative number')
+		# if not subplotting:
+		ax1.set_ylabel('Pitch')
+		ax2.set_xlabel('energy (eV)')
+		ax2.set_ylabel('relative number')
 		ax1.set_xlim((0, 30.e3))
 		ax2.set_xlim((0, 30.e3))
 

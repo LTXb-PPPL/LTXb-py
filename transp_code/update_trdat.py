@@ -117,15 +117,15 @@ def write_sh_file2(filelist):
 		nprocs = np.floor(256 / len(filelist))
 		shotletter = filelist[0].split('/')[-1][-15:-8]
 		
+		# f'echo "256 core user limit, only submit using <={int(nprocs)} CORES"\n' \
 		content = f'#!/usr/bin/expect --\n#created by robot to run TR.DAT files\n' \
-		          f'echo "256 core user limit, only submit using <={int(nprocs)} CORES"\n' \
 		          f'for i in $(seq -f "%02g" {min(nums)} {max(nums)})\ndo\n' \
 		          '	echo " "\n	echo " "\n	echo " "\n' \
 		          f'	echo "starting {shotletter}$i"\n' \
 		          f'	spawn tr_start {shotletter}$i\n' \
-		          '	expect "tokyy_id"\n	send "ltx\r"\n	expect "tokYY_id"\n	send "y\r"\n' \
-		          '	expect "Enter Comments for TR.INF File:"\n	send "x\r"\n' \
-		          '	expect "verify your email address = wcapecch@pppl.gov (Y/N):"\n	send "y\r"\n' \
+		          '	expect "tokyy_id"\n	send "ltx"\r\n	expect "tokYY_id"\n	send "y"\r\n' \
+		          '	expect "Enter Comments for TR.INF File:"\n	send "x"\r\n' \
+		          '	expect "verify your email address = wcapecch@pppl.gov (Y/N):"\n	send "y"\r\n' \
 		          '	expect eof\n' \
 		          f'	echo "submitting {shotletter}$i"\n' \
 		          f'	tr_send {shotletter}$i\n' \
@@ -239,8 +239,17 @@ if __name__ == '__main__':
 	# 	update_trdat(files, updict=update)
 	
 	# create tangency scans for 105795C02 and 105952C02
-	rtans = [18.0, 20.0, 22., 24., 26., 28., 30., 32., 34., 36., 38., 40.]
+	# rtans = [18.0, 20.0, 22., 24., 26., 28., 30., 32., 34., 36., 38., 40.]
 	# create_new('Z:/transp/t105795/105795C02TR.DAT', [f'T{i + 1:02}' for i in np.arange(len(rtans))],
 	#            {'RTCENA(1)': [f'{rt}' for rt in rtans]})
-	create_new('Z:/transp/t105952/105952C02TR.DAT', [f'T{i + 1:02}' for i in np.arange(len(rtans))],
-	           {'RTCENA(1)': [f'{rt}' for rt in rtans]})
+	# create_new('Z:/transp/t105952/105952C02TR.DAT', [f'T{i + 1:02}' for i in np.arange(len(rtans))],
+	#            {'RTCENA(1)': [f'{rt}' for rt in rtans]})
+	
+	# neutral density scan at various energies 3Sept22
+	n0_arr = ['1.E8', '1.E9', '1.E10', '1.E11', '1.E12']  # num/cm^3
+	ebeam_arr = ['10.E3', '13.E3', '16.E3']  # eV
+	nn, ee = np.meshgrid(n0_arr, ebeam_arr)
+	# create_new('Z:/transp/t106536/106536R01TR.DAT', [f'N{i+1:02}' for i in np.arange(len(nn.flatten()))],
+	#            {'EINJA(1)': ee.flatten(), 'DN0OUT': nn.flatten()})
+	# create_new('Z:/transp/t105795/105795R01TR.DAT', [f'N{i+1:02}' for i in np.arange(len(nn.flatten()))],
+	#            {'EINJA(1)': ee.flatten(), 'DN0OUT': nn.flatten()})

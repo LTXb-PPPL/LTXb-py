@@ -1392,7 +1392,8 @@ def perveance_scan_29Jun22(plot_vs='fwhm'):
 	sh1 = 106600 + np.array([60, 62, 64, 65, 67, 68, 69, 70, 71, 72])  # Current scan at 15kV, rtan~25cm
 	sh2 = 106600 + np.array([74, 76, 78, 79])  # Current scan at 12.5kV, rtan~25cm
 	sh3 = 106700 + np.array([4, 8, 10, 11, 12, 13])  # Current scan at 15kV, rtan~21cm, source centered on neutralizer
-	sh4 = 106700 + np.array([17, 20, 23, 25, 29, 30])  # Current scan at 12.5kV, rtan~21cm, source centered on neutralizer
+	sh4 = 106700 + np.array(
+		[17, 20, 23, 25, 29, 30])  # Current scan at 12.5kV, rtan~21cm, source centered on neutralizer
 	descs = ['15kV, rtan=25cm', '12.5kV, rtan=25cm', '15kV, rtan=21cm', '12.5kV, rtan=21cm']
 	for sh in [sh1, sh2, sh3, sh4]:
 		fwhm_arr, perv_arr = np.array([]), np.array([])
@@ -1419,6 +1420,39 @@ def perveance_scan_29Jun22(plot_vs='fwhm'):
 	plt.tight_layout()
 
 
+def power_to_calorimeter_check_26aug22():
+	shots13kv = 107000 + np.array([294, 296, 301, 302, 303, 304, 315, 316, 317])
+	ms13kv = np.array([5, 5, 5, 7.5, 7.5, 7.5, 10, 10, 10])
+	shots8kv = 107300 + np.array([5, 7, 9, 12, 13, 14, 18, 19, 21])
+	ms8kv = np.array([7.5, 7.5, 7.5, 10, 10, 10, 5, 5, 5])
+	desc = ['13 kV', '8 kV']
+	fig, (ax1, ax2) = plt.subplots(ncols=2, figsize=(10, 5), sharey='row')
+	for ii, (ss, pl) in enumerate(zip([shots13kv, shots8kv], [ms13kv, ms8kv])):
+		dt_meas, dt_pred = np.array([]), np.array([])
+		fwhm_arr, xshift_arr, yshift_arr = np.array([]), np.array([]), np.array([])
+		for shot in ss:
+			# print(f'{shot}')
+			dtm, dtp, dt, _ = cal_dtemp(shot, dbug=False, more=True)
+			fwhm, updown, xshift, yshift = cal_guass_fit_offcenter(shot, ret='fwhm', doplot=False)
+			fwhm_arr = np.append(fwhm_arr, fwhm)
+			xshift_arr = np.append(xshift_arr, xshift)
+			yshift_arr = np.append(yshift_arr, yshift)
+			dt_meas = np.append(dt_meas, dtm)
+			dt_pred = np.append(dt_pred, dtp)
+		power_frac = dt_meas / dt_pred
+		ax1.plot(pl, power_frac, 'o', label=desc[ii])
+		ax2.plot(fwhm_arr, power_frac, 'o', label=desc[ii])
+		for i in range(len(xshift_arr)):
+			note = f'{xshift_arr[i]:.1f}\n{yshift_arr[i]:.1f}'
+			ax1.annotate(note, (pl[i], power_frac[i]))
+	ax1.legend()
+	ax1.set_ylabel('meas/pred power fraction')
+	ax1.set_xlabel('pulse length (ms)')
+	ax2.set_xlabel('fwhm (mm)')
+	ax1.set_xlim((4,11))
+	plt.tight_layout()
+
+
 if __name__ == '__main__':
 	# new_valve_data()
 	# new_valve_cathode()
@@ -1441,5 +1475,6 @@ if __name__ == '__main__':
 	# calorimeter_positional_variation()
 	# beam_realignment()
 	# calorimeter_21Jan()  # coincides w/settings used for 14Jan Perveance scan
-	perveance_scan_29Jun22()
+	# perveance_scan_29Jun22()
+	power_to_calorimeter_check_26aug22()
 	plt.show()

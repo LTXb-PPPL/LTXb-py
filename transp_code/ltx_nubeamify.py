@@ -7,6 +7,10 @@ import os
 from helpful_stuff import is_nbi_shot, get_tree_conn, get_data
 
 
+'''
+For an updated version, look in ltx_beambot repo
+'''
+
 # def validate_nubeamify_inputs(dir, trdat, **kwargs):
 
 

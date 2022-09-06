@@ -7,7 +7,7 @@ import numpy as np
 import MDSplus
 import re
 import datetime
-# from bills_LTX_MDSplus_toolbox import *
+from bills_LTX_MDSplus_toolbox import *
 import glob
 import os
 
@@ -153,14 +153,17 @@ def read_nenite(nenite_fn):
 
 
 def read_eqdsk(eqdsk, plot=False):
+	# THIS VERSION assumes each row of psixy start on newline- not true at least for TRANSP output GEQDSK files- use read_eqdsk3
 	f = open(eqdsk, 'r')
 	form = r'\S\d+.\d+E[+-]\d+'
-	_, nxeqd, nyeqd = [int(dig) for dig in re.findall(r'\d+', f.readline())]
+	_, nxeqd, nyeqd = [int(dig) for dig in re.findall(r'\d+', f.readline())][
+	                  -3:]  # transp version has more numbers on leadin
 	xdimeqd, ydimeqd, r0, redeqd, ymideqd = [float(n) for n in re.findall(form, f.readline())]
 	xma, yma, psimag, psilim, beqd = [float(n) for n in re.findall(form, f.readline())]
 	toteqd, psimx1, psimx2, xax1, xax2 = [float(n) for n in re.findall(form, f.readline())]
 	zax1, zax2, psisep, xsep, ysep = [float(n) for n in re.findall(form, f.readline())]
 	nrows = np.ceil(nxeqd / 5.)  # num rows to scan fpol, etc
+	nrows_psi = np.ceil(nxeqd * nyeqd / 5.)  # num rows to scan for psixy
 	fpol, pres, ffpeqd, ppeqd, psixy, q = [], [], [], [], [], []
 	for i in np.arange(nrows) + 1:
 		fpol.extend([float(n) for n in re.findall(form, f.readline())])
@@ -258,7 +261,122 @@ def read_eqdsk(eqdsk, plot=False):
 	return output
 
 
-def read_eqdsk2(filename):
+def read_eqdsk3(eqdsk, plot=False):
+	# THIS VERSION assumes psixy data is flattened so new rows of psixy do not go onto newline in data (as in TRANSP GEQDSK output).
+	# For data that does put new psixy rows onto newlines, use read_eqdsk().
+	f = open(eqdsk, 'r')
+	form = r'\S\d+.\d+E[+-]\d+'
+	_, nxeqd, nyeqd = [int(dig) for dig in re.findall(r'\d+', f.readline())][
+	                  -3:]  # transp version has more numbers on leadin
+	xdimeqd, ydimeqd, r0, redeqd, ymideqd = [float(n) for n in re.findall(form, f.readline())]
+	xma, yma, psimag, psilim, beqd = [float(n) for n in re.findall(form, f.readline())]
+	toteqd, psimx1, psimx2, xax1, xax2 = [float(n) for n in re.findall(form, f.readline())]
+	zax1, zax2, psisep, xsep, ysep = [float(n) for n in re.findall(form, f.readline())]
+	nrows = np.ceil(nxeqd / 5.)  # num rows to scan fpol, etc
+	nrows_psi = np.ceil(nxeqd * nyeqd / 5.)  # num rows to scan for psixy
+	fpol, pres, ffpeqd, ppeqd, psixy, q = [], [], [], [], [], []
+	for i in np.arange(nrows) + 1:
+		fpol.extend([float(n) for n in re.findall(form, f.readline())])
+	for i in np.arange(nrows) + 1:
+		pres.extend([float(n) for n in re.findall(form, f.readline())])
+	for i in np.arange(nrows) + 1:
+		ffpeqd.extend([float(n) for n in re.findall(form, f.readline())])
+	for i in np.arange(nrows) + 1:
+		ppeqd.extend([float(n) for n in re.findall(form, f.readline())])
+	for i in np.arange(nrows_psi) + 1:
+		psixy.extend([float(n) for n in re.findall(form, f.readline())])
+	psixy = np.array(psixy).reshape((nyeqd, nxeqd))
+	for i in np.arange(nrows) + 1:
+		q.extend([float(n) for n in re.findall(form, f.readline())])
+	nrlimit, nrves = [int(dig) for dig in re.findall(r'\d+', f.readline())]
+	nrows_lim = np.ceil(2 * nrlimit / 5.)
+	nrows_ves = np.ceil(2 * nrves / 5)
+	rzlim, rzves = [], []
+	for i in np.arange(nrows_lim) + 1:
+		rzlim.extend([float(n) for n in re.findall(form, f.readline())])
+	for i in np.arange(nrows_ves) + 1:
+		rzves.extend([float(n) for n in re.findall(form, f.readline())])
+	f.close()
+	rlimit, zlimit = [rzlim[2 * i] for i in np.arange(nrlimit)], [rzlim[2 * i + 1] for i in np.arange(nrlimit)]
+	rves, zves = [rzves[2 * i] for i in np.arange(nrves)], [rzves[2 * i + 1] for i in np.arange(nrves)]
+	
+	fpol, pres, ffpeqd, ppeqd, psixy, q = np.array(fpol), np.array(pres), np.array(ffpeqd), np.array(
+		ppeqd), np.array(psixy), np.array(q)
+	rlimit, zlimit, rves, zves = np.array(rlimit), np.array(zlimit), np.array(rves), np.array(zves)
+	
+	dR = xdimeqd / (nxeqd - 1.)
+	dZ = ydimeqd / (nyeqd - 1.)
+	x = np.arange(redeqd, redeqd + xdimeqd + dR, dR)
+	y = np.arange(ymideqd - ydimeqd / 2, ymideqd + ydimeqd / 2 + dZ, dZ)
+	
+	[x_xy, y_xy] = np.meshgrid(x, y)
+	
+	psiout = np.linspace(psimag, psilim, nxeqd)
+	real_psilim = (psilim - .01 * psimag) / .99
+	psirzvec = psixy.reshape(nxeqd * nyeqd)
+	q_xy = np.interp(psirzvec, psiout, q)
+	BtR = np.interp(psirzvec, psiout, fpol)
+	BtR = BtR.reshape([nyeqd, nxeqd])
+	# bphi_xy = BtR / np.transpose(x_xy)  # WJC commented out 6/23/21- why the transpose?? looks wrong
+	bphi_xy = BtR / x_xy
+	bphi_mp = fpol / x
+	
+	rvec_hd, zvec_hd = np.linspace(x[0], x[-1], num=1000), np.linspace(y[0], y[-1], num=1000)
+	r2dhd, z2dhd = np.meshgrid(rvec_hd, zvec_hd)
+	nz0 = np.where(abs(y) == min(abs(y)))[0][0]
+	br_xy, bz_xy = np.zeros_like(psixy), np.zeros_like(psixy)
+	for i in np.arange(len(x)):
+		bz_xy[i, :] = np.gradient(psixy[i, :], x) / x
+		br_xy[:, i] = -np.gradient(psixy[:, i], y - y[0]) / x[i]
+	bp_xy = np.sqrt(br_xy ** 2 + bz_xy ** 2)
+	bp_mp, br_mp, bz_mp = bp_xy[nz0, :], br_xy[nz0, :], bz_xy[nz0, :]
+	bave_xy = np.sqrt(bp_xy ** 2 + bphi_xy ** 2)
+	bave_mp = bave_xy[nz0, :]
+	
+	if plot:
+		fig, (ax1, ax2, ax3) = plt.subplots(ncols=3, sharey='row')
+		ax1.contourf(x_xy, y_xy, br_xy)
+		ax2.contourf(x_xy, y_xy, bz_xy)
+		ax3.contourf(x_xy, y_xy, bphi_xy)
+		ax1.set_title('Br')
+		ax2.set_title('Bz')
+		ax3.set_title('Bphi')
+		# plt.plot(x, br_xy[nz0, :], label='br_xy')
+		# plt.plot(x, bz_xy[nz0, :], label='bz_xy')
+		# plt.plot(x, bphi_mp, label='bt')
+		# plt.legend()
+		plt.show()
+	# BE MORE CAREFUL ABOUT LIMITER HERE
+	# for i in np.arange(len(x)):
+	# 	for j in np.arange(len(y)):
+	# 		if np.sqrt((x[i] - .4) ** 2 + y[j] ** 2) > .3:
+	# 			br_xy[j, i], bz_xy[j, i] = np.nan, np.nan
+	if x[np.where(bz_mp == min(bz_mp))][0] < x[np.where(bz_mp == max(bz_mp))][0]:
+		ip_is_cw = True
+	else:
+		ip_is_cw = False
+	if bphi_mp[0] < 0:
+		bt_is_cw = True
+	else:
+		bt_is_cw = False
+	
+	output = {'nxeqd': nxeqd, 'nyeqd': nyeqd, 'xdimeqd': xdimeqd, 'ydimeqd': ydimeqd, 'r0': r0, 'redeqd': redeqd,
+	          'ymideqd': ymideqd, 'xma': xma, 'yma': yma, 'psimag': psimag, 'psilim': psilim, 'beqd': beqd,
+	          'toteqd': toteqd, 'psimx1': psimx1, 'psimx2': psimx2, 'xax1': xax1, 'xax2': xax2, 'zax1': zax1,
+	          'zax2': zax2, 'psisep': psisep, 'xsep': xsep, 'ysep': ysep, 'fpol': fpol, 'pres': pres, 'ffpeqd': ffpeqd,
+	          'ppeqd': ppeqd, 'q': q, 'nrlimit': nrlimit, 'nrves': nrves, 'rlimit': rlimit, 'zlimit': zlimit,
+	          'rves': rves, 'zves': zves, 'x': x, 'y': y, 'psi': psiout, 'psixy': psixy, 'real_psilim': real_psilim,
+	          'q_xy': q_xy,
+	          'bphi_xy': bphi_xy, 'bp_xy': bp_xy, 'x_xy': x_xy, 'y_xy': y_xy, 'br_xy': br_xy, 'bz_xy': bz_xy,
+	          'bp_mp': bp_mp, 'bphi_mp': bphi_mp, 'bave_mp': bave_mp, 'bave_xy': bave_xy, 'br_mp': br_mp,
+	          'bz_mp': bz_mp, 'ip_is_cw': ip_is_cw, 'bt_is_cw': bt_is_cw}
+	
+	# fpol_xy: fpol_xy, rminor_xy: rminor_xy, norm_psixy: norm_psixy, plasma: new_plasma, dpsi: dpsi,
+	# psiaxis: psi_axis}
+	return output
+
+
+def read_eqdsk2(filename, plot=False):
 	def read_1d(fid, j, n):
 		output = np.zeros((n,))
 		for i in range(n):
@@ -321,7 +439,14 @@ def read_eqdsk2(filename):
 	return eqdsk_obj
 
 
-def ltx_limiter():
+def make_patch_spines_invisible(ax):
+	ax.set_frame_on(True)
+	ax.patch.set_visible(False)
+	for sp in ax.spines.values():
+		sp.set_visible(False)
+
+
+def ltx_limiter(plot=False):
 	'''
 	myFile = fopen('ltx_limiter.txt','r');
 	myNum = fscanf(myFile,'%d',1);
@@ -354,6 +479,11 @@ def ltx_limiter():
 	theta_lim = np.arctan2(zlimiter, (rlimiter - rmag))
 	theta_lim[0] -= 2. * np.pi
 	theta_lim[-1] += 2. * np.pi
+	
+	if plot:
+		plt.plot(rlimiter, zlimiter)
+		plt.axis('equal')
+		plt.show()
 	
 	return rlimiter, zlimiter, rminor_lim, theta_lim
 
@@ -690,8 +820,10 @@ def smooth(x, window_len=11, window='hanning'):
 
 
 if __name__ == '__main__':
-	ll = get_shots_since(date='09/14/21')
+	ltx_limiter(plot=True)
 	a = 1
+# ll = get_shots_since(date='09/14/21')
+# a = 1
 # ltx_limiter()
 # read_nenite('//samba/wcapecch/datasets/LTX_100981_468-1_5.nenite')
 
