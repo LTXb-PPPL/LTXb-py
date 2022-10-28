@@ -17,10 +17,10 @@ pathdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe()
 # print( os.path.exists('/u/phughes/python'),pathdir )
 if os.path.exists('/u/wcapecch/python'):
 	runfromhome = 0
-	print("In the lab eh? Carry on")
+	# print("In the lab eh? Carry on")
 else:
 	runfromhome = 1
-	print(f"how'd I get here?")
+	# print(f"how'd I get here?")
 	# print("I see you're working from home... enjoy your coffee!!")
 
 # elif 'Paul\\Documents\\Laboratory' in pathdir:

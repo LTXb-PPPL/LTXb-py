@@ -123,24 +123,24 @@ def plot_collision_freqs(axs=None, ls='-', showlegend=True):
 
 if __name__ == '__main__':
 	
-	demo = 1
-	frac_demo = 0
+	demo = 0
+	frac_demo = 1
 	show1036170301 = 0
 	if demo:
-		te = 500  # plasma electron temp [eV]
-		ti = 500  # plasma ion temp [eV]
-		eb = 20000  # beam energy [eV]
+		te = 300  # plasma electron temp [eV]
+		ti = 250  # plasma ion temp [eV]
+		eb = 13000  # beam energy [eV]
 		ni = ne = 1.e19  # plasma density [#/m^3]
 		lnlamb = 15.  # unverified
 		Zb = 1.  # beam charge number
 		Ab = 1.  # beam atomic number  (?)
 		axs = plot_collision_freqs()
-		ni = ne = 3.e19
-		te = 500
-		ti = 500
-		plot_collision_freqs(axs=axs, ls='--')
+		# ni = ne = 3.e19
+		# te = 500
+		# ti = 500
+		# plot_collision_freqs(axs=axs, ls='--')
 	if frac_demo:
-		plot_fractional_energy_transfer(eb=11.e3, mb=1, mi=1, interps=[150, 250])
+		plot_fractional_energy_transfer(eb=20.e3, mb=1, mi=1, interps=[150, 250])
 	if show1036170301:
 		# run
 		# psigs = ['\\te', '\\ti', '\\ni', '\\ne']

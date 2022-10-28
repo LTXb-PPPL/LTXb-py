@@ -350,8 +350,10 @@ def tangency_scan_105952_105795():
 				print(f'error processing transp run {transp_run}')
 	[t21, t24, t33, t35] = np.interp([21, 24, 33, 35], rtans, dat[0, 0, :])
 	[tt21, tt24, tt33, tt35] = np.interp([21, 24, 33, 35], rtans, dat[0, 1, :])
-	print(f'\nkW increase from:\n21->24: {(t24/t21-1)*100.:.1f}%\n24->33: {(t33/t24-1)*100.:.1f}%\n24->35: {(t35/t24-1)*100.:.1f}%\n33->35: {(t35/t33-1)*100.:.1f}%\n')
-	print(f'\nNtot increase from:\n21->24: {(tt24/tt21-1)*100.:.1f}%\n24->33: {(tt33/tt24-1)*100.:.1f}%\n24->35: {(tt35/tt24-1)*100.:.1f}%\n33->35: {(tt35/tt33-1)*100.:.1f}%\n')
+	print(
+		f'\nkW increase from:\n21->24: {(t24 / t21 - 1) * 100.:.1f}%\n24->33: {(t33 / t24 - 1) * 100.:.1f}%\n24->35: {(t35 / t24 - 1) * 100.:.1f}%\n33->35: {(t35 / t33 - 1) * 100.:.1f}%\n')
+	print(
+		f'\nNtot increase from:\n21->24: {(tt24 / tt21 - 1) * 100.:.1f}%\n24->33: {(tt33 / tt24 - 1) * 100.:.1f}%\n24->35: {(tt35 / tt24 - 1) * 100.:.1f}%\n33->35: {(tt35 / tt33 - 1) * 100.:.1f}%\n')
 	fig, (ax1, ax2) = plt.subplots(ncols=2)
 	ax1.plot(rtans, dat[0, 0, :], label='105795')
 	ax2.plot(rtans, dat[0, 1, :])
@@ -366,8 +368,55 @@ def tangency_scan_105952_105795():
 	plt.show()
 
 
+def aps_2022_beam_heating():
+	from helpful_stuff import smooth
+	beam = 1065360306  # 106500 + [26,27,32,35,36,60,61,62]
+	nobeam = 1065790104  # 106500 + [28,33,34,37, 48, 77, 78, 79]
+	# beam = 1059520303
+	# nobeam = 1059570101
+	fig, (ax1, ax2) = plt.subplots(nrows=2, sharex='col', figsize=(5, 5))
+	for i, shot in enumerate([nobeam, beam]):
+		if i == 0:
+			c = 'k'
+		else:
+			c = 'r'
+			pinj = SimpleSignal(shot, '\\pinj')
+			pb = SimpleSignal(shot, '\\bpcap')
+			pbe = SimpleSignal(shot, '\\pbe')  # Watts/cm^3
+			dvol = SimpleSignal(shot, '\\dvol')  # cm^3
+			pbe1d = np.sum(pbe.data * dvol.data, axis=1)
+			ax2.plot(pinj.dim1 * 1.e3, pinj.data * 1.e-3, c=c, label='injected')
+			ax2.plot(pb.dim1 * 1.e3, pb.data * 1.e-3, '--', c=c, label='captured')
+			ax2.plot(pbe.dim2 * 1.e3, pbe1d * 1.e-3, '-.', c=c, label='to electrons')
+		
+		ip = SimpleSignal(shot, '\\pcur')
+		poh = SimpleSignal(shot, '\\poht')
+		ax1.plot(ip.dim1 * 1.e3, ip.data * 1.e-3, c=c)
+		pohs = smooth(poh.data * 1.e-3, 51)
+		ax1.plot(poh.dim1 * 1.e3, pohs, '--', c=c)
+	
+	fs, fs2 = 12, 10
+	ax2.set_ylabel('$P_{NBI}$ (kW)', fontsize=fs)
+	ax2.set_xlabel('time (ms)', fontsize=fs)
+	# ax1.set_ylabel('$I_p$ (kA) -\n$P_{OH}$ (kW)')
+	ax2.set_xlim((450, 475))
+	for ax in [ax1, ax2]:
+		ax.tick_params(labelsize=fs2)
+	l1, = ax1.plot(np.nan, np.nan, 'k-', label='$I_p$ (kA)')
+	l2, = ax1.plot(np.nan, np.nan, 'k--', label='$P_{OH} (kW)$')
+	leg1 = ax1.legend(handles=[l1, l2], loc='upper right', labelcolor='linecolor', frameon=False, fontsize=fs2)
+	l3, = ax1.plot(np.nan, np.nan, 'k', label='No Beam', ls='none')
+	l4, = ax1.plot(np.nan, np.nan, 'r', label='With Beam', ls='none')
+	ax1.legend(handles=[l3, l4], loc='upper left', labelcolor='linecolor', frameon=False, fontsize=fs2, handlelength=0)
+	ax1.add_artist(leg1)
+	ax2.legend(fontsize=fs2, frameon=False)
+	plt.tight_layout()
+	plt.show()
+
+
 if __name__ == '__main__':
-	tangency_scan_105952_105795()
+	aps_2022_beam_heating()
+# tangency_scan_105952_105795()
 # santanu_sigs()
 # beam_nobeam_103446_465()
 # shot_analysis_01mar22()

@@ -304,11 +304,8 @@ def read_eqdsk3(eqdsk, plot=False):
 		ppeqd), np.array(psixy), np.array(q)
 	rlimit, zlimit, rves, zves = np.array(rlimit), np.array(zlimit), np.array(rves), np.array(zves)
 	
-	dR = xdimeqd / (nxeqd - 1.)
-	dZ = ydimeqd / (nyeqd - 1.)
-	x = np.arange(redeqd, redeqd + xdimeqd + dR, dR)
-	y = np.arange(ymideqd - ydimeqd / 2, ymideqd + ydimeqd / 2 + dZ, dZ)
-	
+	x = np.linspace(redeqd, redeqd + xdimeqd, endpoint=True, num=nxeqd)
+	y = np.linspace(ymideqd - ydimeqd / 2., ymideqd + ydimeqd / 2., endpoint=True, num=nyeqd)
 	[x_xy, y_xy] = np.meshgrid(x, y)
 	
 	psiout = np.linspace(psimag, psilim, nxeqd)
@@ -764,13 +761,13 @@ def read_transp_cdf(run, local_dir='//samba/wcapecch/transp_rawdata/'):
 		return None
 
 
-def smooth(x, window_len=11, window='hanning'):
+def smooth(x, window_len=11, window='hanning', mode='valid'):
 	"""smooth the data using a window with requested size.
 
 	This method is based on the convolution of a scaled window with the signal.
 	The signal is prepared by introducing reflected copies of the signal
 	(with the window size) in both ends so that transient parts are minimized
-	in the begining and end part of the output signal.
+	in the beginning and end part of the output signal.
 
 	input:
 		x: the input signal
@@ -805,17 +802,27 @@ def smooth(x, window_len=11, window='hanning'):
 	if window_len < 3:
 		return x
 	
-	if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
-		raise ValueError("Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'")
+	if window not in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
+		raise ValueError("Window is one of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'")
 	
-	s = np.r_[x[window_len - 1:0:-1], x, x[-2:-window_len - 1:-1]]
+	if mode not in ['valid', 'same']:
+		raise ValueError("Mode is one of 'valid', 'same'")
+	
+	if mode is 'valid':
+		s = np.r_[x[window_len - 1:0:-1], x, x[-2:-window_len - 1:-1]]
+	else:
+		s = x
 	# print(len(s))
 	if window == 'flat':  # moving average
 		w = np.ones(window_len, 'd')
 	else:
 		w = eval('np.' + window + '(window_len)')
 	
-	y = np.convolve(w / w.sum(), s, mode='valid')
+	if mode is 'valid':
+		y = np.convolve(w / w.sum(), s, mode='valid')
+		y = y[int(window_len / 2):-int(window_len / 2)]  # undo addition in line 808
+	else:
+		y = np.convolve(w / w.sum(), s, mode='same')
 	return y
 
 

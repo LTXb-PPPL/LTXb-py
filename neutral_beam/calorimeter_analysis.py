@@ -762,7 +762,7 @@ def compare_neutralizer_onoff():
 	plt.show()
 
 
-def beam_realignment():
+def beam_realignment(all4=False):
 	clrs = plt.rcParams['axes.prop_cycle'].by_key()['color']
 	
 	# new orifice, original alignment
@@ -776,61 +776,88 @@ def beam_realignment():
 	tp = np.linspace(-50, 100, endpoint=True)
 	
 	a0, a1, a2, a3, a4, adt = get_thermocouple_numbers(shots21jan22, tp)
-	b0, b1, b2, b3, b4, bdt = get_thermocouple_numbers(shots25jan22, tp)
-	c0, c1, c2, c3, c4, cdt = get_thermocouple_numbers(shots1feb22, tp)
+	if all4:
+		b0, b1, b2, b3, b4, bdt = get_thermocouple_numbers(shots25jan22, tp)
+		c0, c1, c2, c3, c4, cdt = get_thermocouple_numbers(shots1feb22, tp)
 	d0, d1, d2, d3, d4, ddt = get_thermocouple_numbers(shots3feb22, tp)
 	
-	fig = plt.figure(tight_layout=True, figsize=(10, 8))
-	gs = gridspec.GridSpec(2, 4)
-	ax1 = fig.add_subplot(gs[0, 0])
-	ax2 = fig.add_subplot(gs[0, 1])
-	ax3 = fig.add_subplot(gs[0, 2])
-	ax4 = fig.add_subplot(gs[0, 3])
-	bax = fig.add_subplot(gs[1, :])
+	if all4:
+		fig = plt.figure(tight_layout=True, figsize=(10, 8))
+		gs = gridspec.GridSpec(2, 4)
+		ax1 = fig.add_subplot(gs[0, 0])
+		ax2 = fig.add_subplot(gs[0, 1])
+		ax3 = fig.add_subplot(gs[0, 2])
+		ax4 = fig.add_subplot(gs[0, 3])
+		bax = fig.add_subplot(gs[1, :])
+	else:
+		fig = plt.figure(figsize=(6, 5))
+		gs = gridspec.GridSpec(2, 2)
+		ax1 = fig.add_subplot(gs[0, 0])
+		ax4 = fig.add_subplot(gs[0, 1])
+		bax = fig.add_subplot(gs[1, :])
 	lbls = ['center', 'down', 'right', 'up', 'left']  # correct labeling
 	for i, a in enumerate([a0, a1, a2, a3, a4]):
 		ax1.plot(tp, a, clrs[i], label=lbls[i])
-	for i, b in enumerate([b0, b1, b2, b3, b4]):
-		ax2.plot(tp, b, clrs[i])
-	for i, c in enumerate([c0, c1, c2, c3, c4]):
-		ax3.plot(tp, c, clrs[i])
+	if all4:
+		for i, b in enumerate([b0, b1, b2, b3, b4]):
+			ax2.plot(tp, b, clrs[i])
+		for i, c in enumerate([c0, c1, c2, c3, c4]):
+			ax3.plot(tp, c, clrs[i])
 	for i, d in enumerate([d0, d1, d2, d3, d4]):
 		ax4.plot(tp, d, clrs[i])
-	ax1.legend()
 	
-	xt = [0, 1, 2, 3]
 	for i in range(5):
-		bax.plot(xt, [adt[i], bdt[i], cdt[i], ddt[i]], 's-', c=clrs[i])
+		if all4:
+			xt = [0, 1, 2, 3]
+			bax.plot(xt, [adt[i], bdt[i], cdt[i], ddt[i]], 's-', c=clrs[i])
+		else:
+			xt = [0, 1]
+			bax.plot([0, 1], [adt[i], ddt[i]], 's-', c=clrs[i], label=lbls[i])
 	
-	ax1.set_ylabel('thermocouple\ntemp (deg C)')
-	ax1.set_xlabel('time rel to beam')
-	for ax in [ax2, ax3, ax4]:
-		ax.set_ylim(ax1.get_ylim())
+	fs, fs2 = 12, 10
+	ax1.set_ylabel('thermocouple\ntemp (deg C)', fontsize=fs)
+	ax1.set_xlabel('time rel to beam', fontsize=fs)
+	if all4:
+		for ax in [ax2, ax3, ax4]:
+			ax.set_ylim(ax1.get_ylim())
+	else:
+		ax4.set_ylim(ax1.get_ylim())
+		for ax in [ax1, ax4, bax]:
+			ax.tick_params(labelsize=fs)
 	# ax2.set_xlabel('time rel to beam')
-	bax.set_ylabel('thermocouple\n$\Delta T$ (deg C)')
+	bax.set_ylabel('thermocouple\n$\Delta T$ (deg C)', fontsize=fs)
 	bax.set_xlim((min(xt) - .5, max(xt) + .5))
 	bax.set_xticks(xt)
 	
 	# COMPUTE rough adjustment guess based on thermocouple ratios
-	fig2, axx = plt.subplots()
-	xx = [0, .1, .3]  # c, a, b
-	yy = [abs(cdt[4] - cdt[2]), abs(adt[4] - adt[2]), abs(bdt[4] - bdt[2])]  # left/right asymmetry across 2 adjustments
-	yy2 = abs(ddt[3] - ddt[1])  # up/down asymmetry
-	fit = np.polyfit(xx, yy, 1)
-	axx.plot(xx, yy, 'o-')
-	axx.plot((yy2 - fit[1]) / fit[0], yy2, 'rs')
-	print(f'Suggested move {yy2}"')
+	if all4:
+		fig2, axx = plt.subplots()
+		xx = [0, .1, .3]  # c, a, b
+		yy = [abs(cdt[4] - cdt[2]), abs(adt[4] - adt[2]),
+		      abs(bdt[4] - bdt[2])]  # left/right asymmetry across 2 adjustments
+		yy2 = abs(ddt[3] - ddt[1])  # up/down asymmetry
+		fit = np.polyfit(xx, yy, 1)
+		axx.plot(xx, yy, 'o-')
+		axx.plot((yy2 - fit[1]) / fit[0], yy2, 'rs')
+		print(f'Suggested move {yy2}"')
 	# lr_pre, lr_post = dt_pre[4] - dt_pre[2], dt_post[4] - dt_post[2]
 	# crossing_fraction = abs(lr_pre) / (abs(lr_pre) + abs(lr_post))  # fraction between pre/post where L/R cross
 	# print(f'L/R cross at {crossing_fraction * 100:.2f}% between Before and After')
 	
-	ax1.set_title('Original')
-	ax2.set_title('Source adjusted 0.4" right')
-	ax3.set_title('Source 0.3" left')
-	ax4.set_title('Calorimeter lowered ~0.4"')
-	bax.set_xlabel('beam realignment')
-	bax.set_xticklabels(['original', 'adj1', 'adj2', 'adj3'])
-	
+	ax1.set_title('Original', fontsize=fs)
+	if all4:
+		ax2.set_title('Source adjusted 0.4" right')
+		ax3.set_title('Source 0.3" left')
+		ax4.set_title('Calorimeter lowered ~0.4"')
+	else:
+		ax4.set_title('Centered', fontsize=fs)
+	bax.set_xlabel('beam realignment', fontsize=fs)
+	if all4:
+		bax.set_xticklabels(['original', 'adj1', 'adj2', 'adj3'])
+	else:
+		bax.set_xticklabels(['original', 'centered'], fontsize=fs2)
+	bax.legend(title='thermocouple', loc='right', fontsize=fs2, frameon=False)
+	plt.tight_layout()
 	plt.show()
 
 
@@ -934,6 +961,7 @@ def perveance_scan_7feb22(plot_vs='fwhm'):
 	ax1.set_xlabel('perveance ($\\times 10^{-6}$)', fontsize=fs)
 	ax1.set_ylabel(f'{plot_vs}{units}', fontsize=fs)
 	ax1.tick_params(labelsize=fs)
+	ax1.set_xlim((0, 30))
 	plt.tight_layout()
 
 
@@ -1449,18 +1477,19 @@ def power_to_calorimeter_check_26aug22():
 	ax1.set_ylabel('meas/pred power fraction')
 	ax1.set_xlabel('pulse length (ms)')
 	ax2.set_xlabel('fwhm (mm)')
-	ax1.set_xlim((4,11))
+	ax1.set_xlim((4, 11))
 	plt.tight_layout()
 
 
 if __name__ == '__main__':
+	# perveance_scan_7feb22(plot_vs='FWHM')
 	# new_valve_data()
 	# new_valve_cathode()
 	# new_valve_neutralizer()
 	# offcenter = 508397
 	# centered = 508188
 	# cal_guass_fit_offcenter(offcenter)
-	
+	# calorimeter_current_scan_29mar22()
 	# calorimeter_21Jan()  # max 53%
 	# stray_field_test_6apr22()
 	# calorimeter_current_scan_29mar22()
@@ -1473,8 +1502,8 @@ if __name__ == '__main__':
 	# gauss2d_integral(2, inspect=True)
 	# cal_gauss_fit([105048])  # 65
 	# calorimeter_positional_variation()
-	# beam_realignment()
+	beam_realignment()
 	# calorimeter_21Jan()  # coincides w/settings used for 14Jan Perveance scan
 	# perveance_scan_29Jun22()
-	power_to_calorimeter_check_26aug22()
+	# power_to_calorimeter_check_26aug22()
 	plt.show()
