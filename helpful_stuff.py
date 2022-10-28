@@ -741,6 +741,21 @@ class SimpleSignal:
 				ax.set_ylabel('y ({})'.format(self.dim2units))
 
 
+def multiple_legends_example():
+	d1 = np.linspace(0, 20)
+	d2, d3 = np.sin(d1), np.cos(d1)
+	fig, ax = plt.subplots()
+	p1, = ax.plot(d1, d2, label='sin')
+	p2, = ax.plot(d1, d3, label='cos')
+	p3, = ax.plot(np.nan, np.nan, label=f'dude')
+	p4, = ax.plot(np.nan, np.nan, label=f'bro')
+	leg1 = ax.legend(handles=[p1, p2], loc='upper left', title='whoa')
+	ax.legend(handles=[p3, p4], loc='center left')
+	ax.add_artist(leg1)
+	
+	plt.show()
+
+
 def read_transp_cdf(run, local_dir='//samba/wcapecch/transp_rawdata/'):
 	# NOTE this is poorly outfitted- requires looking in /12/ directory which may not be the case
 	import os
@@ -827,7 +842,7 @@ def smooth(x, window_len=11, window='hanning', mode='valid'):
 
 
 if __name__ == '__main__':
-	ltx_limiter(plot=True)
+	multiple_legends_example()
 	a = 1
 # ll = get_shots_since(date='09/14/21')
 # a = 1
