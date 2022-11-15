@@ -1,13 +1,10 @@
 import datetime
-from datetime import date
 
 from npa.npa_channel_efficiencies import NPA
 from transp_code.transp_classes import Halo3D, FBM
-import matplotlib.pyplot as plt
-import numpy as np
 from matplotlib import ticker
-from helpful_stuff import read_eqdsk3, ltx_limiter, read_nenite
-from npa.ionization_cross_sections import *
+from toolbox.helpful_stuff import read_eqdsk3, ltx_limiter, read_nenite
+from toolbox.ionization_cross_sections import *
 from scipy.interpolate import griddata, RegularGridInterpolator
 import pickle
 import os
@@ -38,7 +35,7 @@ program in the sign convention for pitch
 
 def synthetic_npa(fbm_fn, n0_fn, eq_fn, nenite_fn, aperture_view=None, savfn='Z:/default.pkl', beamtan=21.3):
 	# NPA detector position
-	tangential = 0
+	tangential = 1
 	if tangential:
 		r_det, phi_det_degree, z_det = .8, 190., 0.  # tangential view
 		# aperture_phi0_deg, aperture_theta0_deg = 15, 0  # rtan ~ 20
@@ -93,8 +90,8 @@ def synthetic_npa(fbm_fn, n0_fn, eq_fn, nenite_fn, aperture_view=None, savfn='Z:
 				return 1.e9  # sets background neutral density  (#/cm^3)
 		
 		eq = read_eqdsk3(eq_fn)
-		xb, plflx, ne_m3, ni_m3, te_ev = read_nenite(nenite_fn)
-		ne_m3, ni_m3 = ne_m3 * 1.e6, ni_m3 * 1.e6  # convert to m^-3
+		xb, plflx, ne_cm3, ni_cm3, te_ev = read_nenite(nenite_fn)
+		ne_m3, ni_m3 = ne_cm3 * 1.e6, ni_cm3 * 1.e6  # convert to m^-3
 		rlimiter, zlimiter, rminor_lim, theta_lim = ltx_limiter()
 		eq_r2d, eq_z2d, br2d, bz2d, bphi2d, psi_rz = eq['x_xy'], eq['y_xy'], eq['br_xy'], eq['bz_xy'], eq['bphi_xy'], \
 		                                             eq[

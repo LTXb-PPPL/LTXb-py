@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from helpful_stuff import get_tree_conn, get_data
+from toolbox.helpful_stuff import get_tree_conn, get_data
 
 """
 Diagnosing strange arc source behavior

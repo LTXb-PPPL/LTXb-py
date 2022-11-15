@@ -1,9 +1,7 @@
-import datetime
-
 import matplotlib.pyplot as plt
 import numpy as np
 import re
-from helpful_stuff import read_eqdsk2
+from toolbox.helpful_stuff import read_eqdsk2
 
 
 def check_lim_file(fn, eqdsks=[]):

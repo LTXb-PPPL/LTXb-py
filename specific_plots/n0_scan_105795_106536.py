@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from helpful_stuff import make_patch_spines_invisible, SimpleSignal
+from toolbox.helpful_stuff import make_patch_spines_invisible, SimpleSignal
 
 
 def n0_scan(ltx_shot):

@@ -1,7 +1,5 @@
-import matplotlib.pyplot as plt
-import numpy as np
-from helpful_stuff import SimpleSignal, read_transp_cdf
-from neutral_beam.ionization_cross_sections import *
+from toolbox.helpful_stuff import SimpleSignal
+from toolbox.ionization_cross_sections import *
 
 """
 Idea here- at our injection energy, only 25-30% of beam is fueling (via ion- or electron-impact ionization).

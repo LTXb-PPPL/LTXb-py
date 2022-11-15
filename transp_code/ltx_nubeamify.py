@@ -1,10 +1,9 @@
 import datetime
 import warnings
 
-import matplotlib.pyplot as plt
 import numpy as np
 import os
-from helpful_stuff import is_nbi_shot, get_tree_conn, get_data
+from toolbox.helpful_stuff import is_nbi_shot, get_tree_conn, get_data
 
 
 '''

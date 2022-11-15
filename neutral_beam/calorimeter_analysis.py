@@ -1,7 +1,5 @@
 import matplotlib.gridspec as gridspec
-import matplotlib.pyplot as plt
-import numpy as np
-from helpful_stuff import avg_perv, calculate_perv_pwr, get_shot_timestamp
+from toolbox.helpful_stuff import avg_perv, calculate_perv_pwr, get_shot_timestamp
 import lvm_read
 from bills_LTX_MDSplus_toolbox import *
 import os

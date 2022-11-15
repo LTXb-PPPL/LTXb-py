@@ -9,9 +9,8 @@ import datetime
 from matplotlib import ticker
 import numpy as np
 import matplotlib.pyplot as plt
-import MDSplus
 from scipy.io import netcdf
-from helpful_stuff import read_transp_cdf, closest
+from toolbox.helpful_stuff import read_transp_cdf, closest
 
 
 class FBM:

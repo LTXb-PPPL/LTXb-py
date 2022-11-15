@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
-import numpy as np
-from helpful_stuff import SimpleSignal
+from toolbox.helpful_stuff import SimpleSignal
 
 
 def plot_sig(sig='.inputs.ter', shot=1000030301, ax=None):

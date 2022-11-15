@@ -331,10 +331,14 @@ def read_eqdsk3(eqdsk, plot=False):
 	bave_mp = bave_xy[nz0, :]
 	
 	if plot:
+		lr, lz, _, _ = ltx_limiter()
 		fig, (ax1, ax2, ax3) = plt.subplots(ncols=3, sharey='row')
 		ax1.contourf(x_xy, y_xy, br_xy)
+		ax1.plot(rlimit, zlimit, 'k-')
 		ax2.contourf(x_xy, y_xy, bz_xy)
 		ax3.contourf(x_xy, y_xy, bphi_xy)
+		for ax in [ax1, ax2, ax3]:
+			ax.plot(lr, lz, 'k-')
 		ax1.set_title('Br')
 		ax2.set_title('Bz')
 		ax3.set_title('Bphi')
@@ -342,6 +346,13 @@ def read_eqdsk3(eqdsk, plot=False):
 		# plt.plot(x, bz_xy[nz0, :], label='bz_xy')
 		# plt.plot(x, bphi_mp, label='bt')
 		# plt.legend()
+		fig2, (ax4, ax5) = plt.subplots(ncols=2)
+		ax4.contour(x_xy, y_xy, psixy, levels=np.linspace(psimag, psilim, num=15), linestyles='--', colors='k')
+		ax4.plot(lr, lz, 'k-')
+		ax4.plot(rlimit, zlimit, 'r-')
+		ax4.axis('equal')
+		ax4.set_ylim((-1.1 * max(lz), 1.1 * max(lz)))
+		ax4.axis('off')
 		plt.show()
 	# BE MORE CAREFUL ABOUT LIMITER HERE
 	# for i in np.arange(len(x)):
@@ -466,16 +477,28 @@ def ltx_limiter(plot=False):
 	
 	rlimiter = np.roll(rlimiter, -2)
 	zlimiter = np.roll(zlimiter, -2)
-	r0, z0, r1, z1 = rlimiter[0], zlimiter[0], rlimiter[-1], zlimiter[-1]
-	# create double overlap (useful for interpolation arrays generated below)
-	rlimiter, zlimiter = np.insert(rlimiter, 0, r1), np.insert(zlimiter, 0, z1)
-	rlimiter, zlimiter = np.append(rlimiter, r0), np.append(zlimiter, z0)
 	
+	# adding in pts along gaps on LF and HFS
+	rbot, zbot = rlimiter[:103], zlimiter[:103]
+	rtop, ztop = rlimiter[103:], zlimiter[103:]
+	nh, nl = int((ztop[-1] - zbot[0]) * 100.), int((ztop[0] - zbot[-1]) * 100.)
+	rhfs, zhfs = np.ones(nh) * min(rlimiter), np.linspace(ztop[-1], zbot[0], endpoint=True, num=nh + 2)
+	zhfs = zhfs[1:-1]
+	rpos, zpos = rhfs[np.where(zhfs > 0)], zhfs[np.where(zhfs > 0)]
+	rneg, zneg = rhfs[np.where(zhfs < 0)], zhfs[np.where(zhfs < 0)]
+	rlfs, zlfs = np.ones(nl) * max(rlimiter), np.linspace(zbot[-1], ztop[0], endpoint=True, num=nl + 2)
+	zlfs = zlfs[1:-1]
+	rlimiter, zlimiter = np.array([]), np.array([])
+	for arr in [[min(rbot)], rneg, rbot, rlfs, rtop, rpos, [min(rbot)]]:
+		rlimiter = np.append(rlimiter, arr)
+	for arr in [[0.], zneg, zbot, zlfs, ztop, zpos, [0.]]:
+		zlimiter = np.append(zlimiter, arr)
+
 	rmag = 0.4  # doesn't need to be exact, just using interior pt. to find pts outside limiter
 	rminor_lim = np.sqrt((rlimiter - rmag) ** 2 + zlimiter ** 2)
 	theta_lim = np.arctan2(zlimiter, (rlimiter - rmag))
 	theta_lim[0] -= 2. * np.pi
-	theta_lim[-1] += 2. * np.pi
+	# theta_lim[-1] += 2. * np.pi
 	
 	if plot:
 		plt.plot(rlimiter, zlimiter)
@@ -483,6 +506,13 @@ def ltx_limiter(plot=False):
 		plt.show()
 	
 	return rlimiter, zlimiter, rminor_lim, theta_lim
+
+
+def ltx_above():
+	rl, _, _, _ = ltx_limiter()
+	th = np.linspace(-np.pi, np.pi, endpoint=True, num=250)
+	xin, xout, yin, yout = min(rl) * np.cos(th), max(rl) * np.cos(th), min(rl) * np.sin(th), max(rl) * np.sin(th)
+	return xin, xout, yin, yout
 
 
 def make_patch_spines_invisible(ax):
@@ -842,7 +872,9 @@ def smooth(x, window_len=11, window='hanning', mode='valid'):
 
 
 if __name__ == '__main__':
-	multiple_legends_example()
+	eq = 'Z:/transp/t106536/106536R02_05.eqdsk'
+	read_eqdsk3(eq, plot=True)
+	# multiple_legends_example()
 	a = 1
 # ll = get_shots_since(date='09/14/21')
 # a = 1

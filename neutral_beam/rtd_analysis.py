@@ -1,9 +1,6 @@
-import matplotlib.pyplot as plt
-import numpy as np
-from helpful_stuff import avg_perv
+from toolbox.helpful_stuff import avg_perv
 import lvm_read
 from bills_LTX_MDSplus_toolbox import *
-import pickle
 from neutral_beam.calorimeter_analysis import calculate_perv_pwr
 from op_scopes import avg_density_during_beam
 

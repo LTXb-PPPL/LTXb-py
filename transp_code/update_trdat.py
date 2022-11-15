@@ -202,54 +202,66 @@ def ip_n0_eb_scan(cleancopy=False):
 
 
 if __name__ == '__main__':
-	# focal length scan (180 nominal). range 160, 165, ... 200
-	# foc = [str(f) for f in np.linspace(160, 200, endpoint=True, num=9)]
-	# create_new('Z:/transp/t103617/103617C01TR.DAT', [f'F{i:02}' for i in np.arange(1, 10)],
-	#            {'FOCLR': foc, 'FOCLZ': foc})
-	
-	# divergence scan (.02 nominal) range .02,.03, ... .10
-	# div = [str(d) for d in np.linspace(.02, .1, endpoint=True, num=9)]
-	# create_new('Z:/transp/t103617/103617C01TR.DAT', [f'D{i:02}' for i in np.arange(1, 10)], {'DIVR': div, 'DIVZ': div})
-	# a = 1
-	
-	# create_new('Z:/transp/t103617/103617C01TR.DAT',
-	#            ['V01', 'V02', 'V03', 'V04', 'V05', 'V06', 'V07', 'V08', 'V09', 'V10', 'V11'], {
-	# 	           'EINJA(1)': ['1.0d4', '1.1d4', '1.2d4', '1.3d4', '1.4d4', '1.5d4', '1.6d4', '1.7d4', '1.8d4',
-	# 	                        '1.9d4', '2.0d4']})
-	# create_new('Z:/transp/t103617/103617C01TR.DAT',
-	#            ['N01', 'N02', 'N03', 'N04', 'N05', 'N06', 'N07', 'N08', 'N09', 'N10', 'N11'], {
-	# 	           'DN0OUT': ['1.e8', '5.e8', '1.e9', '5.e9', '1.e10', '5.e10', '1.e11', '5.e11', '1.e12', '5.e12',
-	# 	                      '1.e13']})
-	# perv = 15.e-6
-	# vb = np.arange(10, 21) * 1000.  # 10-20kV
-	# ib = perv * vb ** 1.5  # A
-	# pb = ib * vb  # W
-	# vbarr = [f'{v:1.1e}' for v in vb]
-	# pbarr = [f'{p:1.1e}' for p in pb]
-	# newnames = [f'P{i:02}' for i in np.arange(1, 12)]
-	# create_new('Z:/transp/t103617/103617C01TR.DAT', newnames, {'EINJA(1)': vbarr, 'PINJA(1)': pbarr})
-	
-	a = 1
-	# ip_n0_eb_scan(cleancopy=True)
-	
-	# fix_stuff_with_current_density_energy_scan = False
-	# if fix_stuff_with_current_density_energy_scan:
-	# 	files = [f'Z:/transp/t100002/100002D{str(i).zfill(2)}TR.dat' for i in np.arange(15) + 1]
-	# 	update = {'EINJA(1)': '1.6d4'}
-	# 	update_trdat(files, updict=update)
-	
-	# create tangency scans for 105795C02 and 105952C02
-	# rtans = [18.0, 20.0, 22., 24., 26., 28., 30., 32., 34., 36., 38., 40.]
-	# create_new('Z:/transp/t105795/105795C02TR.DAT', [f'T{i + 1:02}' for i in np.arange(len(rtans))],
-	#            {'RTCENA(1)': [f'{rt}' for rt in rtans]})
-	# create_new('Z:/transp/t105952/105952C02TR.DAT', [f'T{i + 1:02}' for i in np.arange(len(rtans))],
-	#            {'RTCENA(1)': [f'{rt}' for rt in rtans]})
-	
-	# neutral density scan at various energies 3Sept22
-	n0_arr = ['1.E8', '1.E9', '1.E10', '1.E11', '1.E12']  # num/cm^3
-	ebeam_arr = ['10.E3', '13.E3', '16.E3']  # eV
-	nn, ee = np.meshgrid(n0_arr, ebeam_arr)
-	# create_new('Z:/transp/t106536/106536R01TR.DAT', [f'N{i+1:02}' for i in np.arange(len(nn.flatten()))],
-	#            {'EINJA(1)': ee.flatten(), 'DN0OUT': nn.flatten()})
-	# create_new('Z:/transp/t105795/105795R01TR.DAT', [f'N{i+1:02}' for i in np.arange(len(nn.flatten()))],
-	#            {'EINJA(1)': ee.flatten(), 'DN0OUT': nn.flatten()})
+	# create tangency scans for 106536R02 at all 4 orientations (normal ops, rev-Ip, rev-Bt, rev-Ip*Bt)
+	rtans = [19., 28., 36., 44., 53.]
+	nlbccw = ['.T', '.T', '.F', '.F']
+	nljccw = ['.F', '.T', '.F', '.T']
+	nlco1 = ['.T', '.F', '.T', '.F']
+	_, bb = np.meshgrid(rtans, nlbccw)
+	_, jj = np.meshgrid(rtans, nljccw)
+	rr, cc = np.meshgrid(rtans, nlco1)
+	a=1
+	# create_new('Z:/transp/t106536/106536R02TR.DAT', [f'T{i + 1:02}' for i in np.arange(len(rr.flatten()))],
+	#            {'RTCENA(1)': [f'{rt}' for rt in rr.flatten()], 'NLCO(1)': cc.flatten(), 'NLBCCW': bb.flatten(),
+	#             'NLJCCW': jj.flatten()})
+
+# focal length scan (180 nominal). range 160, 165, ... 200
+# foc = [str(f) for f in np.linspace(160, 200, endpoint=True, num=9)]
+# create_new('Z:/transp/t103617/103617C01TR.DAT', [f'F{i:02}' for i in np.arange(1, 10)],
+#            {'FOCLR': foc, 'FOCLZ': foc})
+
+# divergence scan (.02 nominal) range .02,.03, ... .10
+# div = [str(d) for d in np.linspace(.02, .1, endpoint=True, num=9)]
+# create_new('Z:/transp/t103617/103617C01TR.DAT', [f'D{i:02}' for i in np.arange(1, 10)], {'DIVR': div, 'DIVZ': div})
+# a = 1
+
+# create_new('Z:/transp/t103617/103617C01TR.DAT',
+#            ['V01', 'V02', 'V03', 'V04', 'V05', 'V06', 'V07', 'V08', 'V09', 'V10', 'V11'], {
+# 	           'EINJA(1)': ['1.0d4', '1.1d4', '1.2d4', '1.3d4', '1.4d4', '1.5d4', '1.6d4', '1.7d4', '1.8d4',
+# 	                        '1.9d4', '2.0d4']})
+# create_new('Z:/transp/t103617/103617C01TR.DAT',
+#            ['N01', 'N02', 'N03', 'N04', 'N05', 'N06', 'N07', 'N08', 'N09', 'N10', 'N11'], {
+# 	           'DN0OUT': ['1.e8', '5.e8', '1.e9', '5.e9', '1.e10', '5.e10', '1.e11', '5.e11', '1.e12', '5.e12',
+# 	                      '1.e13']})
+# perv = 15.e-6
+# vb = np.arange(10, 21) * 1000.  # 10-20kV
+# ib = perv * vb ** 1.5  # A
+# pb = ib * vb  # W
+# vbarr = [f'{v:1.1e}' for v in vb]
+# pbarr = [f'{p:1.1e}' for p in pb]
+# newnames = [f'P{i:02}' for i in np.arange(1, 12)]
+# create_new('Z:/transp/t103617/103617C01TR.DAT', newnames, {'EINJA(1)': vbarr, 'PINJA(1)': pbarr})
+
+# ip_n0_eb_scan(cleancopy=True)
+
+# fix_stuff_with_current_density_energy_scan = False
+# if fix_stuff_with_current_density_energy_scan:
+# 	files = [f'Z:/transp/t100002/100002D{str(i).zfill(2)}TR.dat' for i in np.arange(15) + 1]
+# 	update = {'EINJA(1)': '1.6d4'}
+# 	update_trdat(files, updict=update)
+
+# create tangency scans for 105795C02 and 105952C02
+# rtans = [18.0, 20.0, 22., 24., 26., 28., 30., 32., 34., 36., 38., 40.]
+# create_new('Z:/transp/t105795/105795C02TR.DAT', [f'T{i + 1:02}' for i in np.arange(len(rtans))],
+#            {'RTCENA(1)': [f'{rt}' for rt in rtans]})
+# create_new('Z:/transp/t105952/105952C02TR.DAT', [f'T{i + 1:02}' for i in np.arange(len(rtans))],
+#            {'RTCENA(1)': [f'{rt}' for rt in rtans]})
+
+# neutral density scan at various energies 3Sept22
+# n0_arr = ['1.E8', '1.E9', '1.E10', '1.E11', '1.E12']  # num/cm^3
+# ebeam_arr = ['10.E3', '13.E3', '16.E3']  # eV
+# nn, ee = np.meshgrid(n0_arr, ebeam_arr)
+# create_new('Z:/transp/t106536/106536R01TR.DAT', [f'N{i+1:02}' for i in np.arange(len(nn.flatten()))],
+#            {'EINJA(1)': ee.flatten(), 'DN0OUT': nn.flatten()})
+# create_new('Z:/transp/t105795/105795R01TR.DAT', [f'N{i+1:02}' for i in np.arange(len(nn.flatten()))],
+#            {'EINJA(1)': ee.flatten(), 'DN0OUT': nn.flatten()})

@@ -3,7 +3,7 @@ import numpy as np
 import glob
 import os
 
-from helpful_stuff import closest
+from toolbox.helpful_stuff import closest
 from neutral_beam.resonance.resonance_tools import convert_sav_to_dict
 import pickle
 from neutral_beam.resonance.vdote import vdote

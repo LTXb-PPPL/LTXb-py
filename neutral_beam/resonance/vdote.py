@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from helpful_stuff import read_eqdsk
 import pickle
 from scipy import integrate
 from scipy.interpolate import interp2d

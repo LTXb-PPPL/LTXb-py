@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from helpful_stuff import get_tree_conn, get_data, make_patch_spines_invisible, SimpleSignal, is_nbi_shot
+from toolbox.helpful_stuff import get_tree_conn, get_data, make_patch_spines_invisible, SimpleSignal, is_nbi_shot
 from neutral_beam.calorimeter_analysis import cal_temp_sigs, cal_dtemp
 
 
@@ -369,7 +369,7 @@ def tangency_scan_105952_105795():
 
 
 def aps_2022_beam_heating():
-	from helpful_stuff import smooth
+	from toolbox.helpful_stuff import smooth
 	beam = 1065360306  # 106500 + [26,27,32,35,36,60,61,62]
 	nobeam = 1065790104  # 106500 + [28,33,34,37, 48, 77, 78, 79]
 	# beam = 1059520303

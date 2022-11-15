@@ -3,11 +3,9 @@ To look for more signals, remote onto NoMachine and run traverser
 open tree "ltx_b" and shot 101602 (for example)
 then navigate around to see which signals are available to plot
 """
-from helpful_stuff import smooth, get_current_ltx_shot, is_nbi_shot, is_good_shot
+from toolbox.helpful_stuff import smooth, is_nbi_shot
 from bills_LTX_MDSplus_toolbox import *
-from shotgroup_database import get_shots
 import matplotlib.pyplot as plt
-import MDSplus
 
 
 def plot_ip(ax, tree, lbl=None):

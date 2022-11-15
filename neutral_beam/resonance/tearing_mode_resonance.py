@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
-import numpy as np
 import os
-from helpful_stuff import read_eqdsk, ltx_limiter
+from toolbox.helpful_stuff import read_eqdsk, ltx_limiter
 from scipy.io import readsav
 
 if os.path.exists('Z:/users/wcapecch/'):

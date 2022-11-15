@@ -2,14 +2,12 @@ import glob
 
 import matplotlib.pyplot as plt
 import numpy as np
-from helpful_stuff import is_nbi_shot, is_good_shot
+from toolbox.helpful_stuff import is_nbi_shot
 from bills_LTX_MDSplus_toolbox import get_tree_conn, get_data
 import os
-import plotly
 import json
-from helpful_stuff import read_eqdsk2
+from toolbox.helpful_stuff import read_eqdsk2
 from conbeam import conbeam_tools
-from scipy.io import loadmat
 
 
 def rmag_v_rlcfs(rescan=True, ploteach=False):

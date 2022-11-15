@@ -1,7 +1,6 @@
-import matplotlib.pyplot as plt
 import numpy as np
 
-from helpful_stuff import closest
+from toolbox.helpful_stuff import closest
 
 """
 This data refers to instrument function of PROPOSED LTX design, not actual ANPA from UW
