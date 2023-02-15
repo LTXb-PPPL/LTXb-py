@@ -25,9 +25,14 @@ beam_fueling_fraction = frac_initial_cx*ffuel + frac_initial_impact_ionization
 
 '''CONTROLS'''
 new2dscan = True
+newhalo = True
+nth = 1  # downsample to every nth point
+tol = 1.e-4  # tolerance for convergence of neutral tracks at given location
 ''' VARIABLES '''
 shot = 106536
 direc = 'Z:/transp/'
+# fsav2d = f'Z:/PycharmProjects/LTXb-py/neutral_beam/neut_halo_fueling_ds{nth}.pkl'
+fsav2d = f'Z:/PycharmProjects/LTXb-py/neutral_beam/neut_halo_fueling_ds{nth}_10xdensity.pkl'
 for (rtanfn, rtan) in zip([2], [24.]):
 	fbm_fn = f'{direc}t{shot}/{shot}R02_fi_5.cdf'
 	n0_fn = f'{direc}t{shot}/{shot}R02_boxn0_5.cdf'
@@ -40,19 +45,19 @@ ion_amu = 1.  # amu of ion species
 
 clrs = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
-fsav2d = 'Z:/PycharmProjects/LTX-py/neutral_beam/neut_halo_fueling.pkl'
-
 # interp density onto equilibrium poloidal plane
 eq = read_eqdsk3(eq_fn)
 xb, plflx, ne_cm3, ni_cm3, te_ev = read_nenite(nenite_fn)
-ne_m3, ni_m3 = ne_cm3 * 1.e6, ni_cm3 * 1.e6  # convert to m^-3
+# artificially play w/density
+ne_cm3 *= 10.
+ni_cm3 *= 10.
+# ne_m3, ni_m3 = ne_cm3 * 1.e6, ni_cm3 * 1.e6  # convert to m^-3
 rlimiter, zlimiter, rminor_lim, theta_lim = ltx_limiter()
 eq_r2d, eq_z2d, br2d, bz2d, bphi2d, psi_rz = eq['x_xy'], eq['y_xy'], eq['br_xy'], eq['bz_xy'], eq['bphi_xy'], eq[
 	'psixy']
 r1d, z1d = eq['x'], eq['y']
 
 # reduce grid resolution for faster model
-nth = 3  # downsample to every nth point
 eq_r2d, eq_z2d, br2d = eq_r2d[::nth, ::nth], eq_z2d[::nth, ::nth], br2d[::nth, ::nth]
 bz2d, bphi2d, psi_rz = bz2d[::nth, ::nth], bphi2d[::nth, ::nth], psi_rz[::nth, ::nth]
 r1d, z1d = r1d[::nth], z1d[::nth]
@@ -154,7 +159,6 @@ if new2dscan:
 			if z1d[iz] < 0:  # consider only upper half of poloidal cross section (up-down symmetry)
 				ok = False
 			if ok:
-				tol = 1.e-3  # total guess right now, setting tolerance for convergence
 				ffuel_rz = [0.]
 				eps = 1.
 				ncomp, nfuel = 0, 0
@@ -169,12 +173,12 @@ if new2dscan:
 				fuel_2d[iz, ir] = ffuel_rz[-1]
 			else:  # started outside boundary
 				fuel_2d[iz, ir] = np.nan
-
+	
 	# since we only looked at area above midplane, mirror below for full poloidal cross section
 	for i in range(len(z1d)):
 		if z1d[i] < 0:
 			fuel_2d[i, :] = fuel_2d[-1 - i, :]
-
+	
 	dat2d = {'r2d': eq_r2d, 'z2d': eq_z2d, 'fuel2d': fuel_2d}
 	pickle.dump(dat2d, open(fsav2d, 'wb'))
 	print(f'saved: {fsav2d}')
@@ -182,18 +186,67 @@ else:
 	dat2d = pickle.load(open(fsav2d, 'rb'))
 	eq_r2d, eq_z2d, fuel_2d = dat2d['r2d'], dat2d['z2d'], dat2d['fuel2d']
 
-c = plt.contourf(eq_r2d, eq_z2d, fuel_2d)
-plt.colorbar(c)
-plt.show()
+if newhalo:
+	# SIMILAR to npa_modeling.py handling, create fneut function to compute neut density as function of
+	halo = Halo3D(n0_fn)  # [NLBOX, NYBOX, NXBOX, NBBOX]
+	# only 1 beam box- remove extra dimension
+	halo.boxn0 = halo.boxn0[:, :, :, 0]
+	halo.boxn0h0 = halo.boxn0h0[:, :, :, 0]
+	halo.boxn0hh = halo.boxn0hh[:, :, :, 0]
+	halo.total_neut = halo.boxn0 + halo.boxn0h0 + halo.boxn0hh  # beam + 0 gen + higher gen neutrals (#/cm^3)
+	halo.thermal_neut = halo.boxn0h0 + halo.boxn0hh  # ignore beam neutrals (high energy), only look at secondaries
+	
+	beamtan = 24.  # [cm] RTCENA(1) in TR.DAT
+	beamsrc_to_tan = 257.  # [cm] (dist from beam source to tangency radius: XLBTNA in TR.DAT)
+	xsrc, ysrc = 0, np.sqrt(beamtan ** 2 + beamsrc_to_tan ** 2)
+	phi_src = np.arctan2(beamtan, beamsrc_to_tan)  # angle between src-machinecenter and beam-centerline
+	
+	halo2d = np.zeros_like(ne_2d)
+	for il in range(len(halo.lbox)):
+		for ix in range(len(halo.xbox)):
+			for iy in range(len(halo.ybox)):
+				xpt = xsrc + halo.lbox[il] * np.sin(phi_src) - halo.xbox[ix] * np.cos(phi_src)
+				ypt = ysrc - halo.lbox[il] * np.cos(phi_src) - halo.xbox[ix] * np.sin(phi_src)
+				rpt = np.sqrt(xpt ** 2 + ypt ** 2) * 1.e-2
+				zpt = halo.ybox[iy] * 1.e-2  # convert to m to be consistent w/r1d,z1d
+				npt = halo.thermal_neut[il, iy, ix]  # num/cm^3
+				if pt_inside_boundary(rpt, zpt):
+					(_, ir) = closest(r1d, rpt)
+					(_, iz) = closest(z1d, zpt)
+					halo2d[iz, ir] += npt  # add neut density to 2d slice
+	dv = halo.dv
+	dat2d = {'r2d': eq_r2d, 'z2d': eq_z2d, 'fuel2d': fuel_2d, 'halo2d': halo2d, 'dv': dv}
+	pickle.dump(dat2d, open(fsav2d, 'wb'))
+	print(f'saved: {fsav2d}')
+else:
+	dat2d = pickle.load(open(fsav2d, 'rb'))
+	eq_r2d, eq_z2d, fuel_2d, halo2d, dv = dat2d['r2d'], dat2d['z2d'], dat2d['fuel2d'], dat2d['halo2d'], dat2d['dv']
 
-# SIMILAR to npa_modeling.py handling, create fneut function to compute neut density as function of
-neut_halo = Halo3D(n0_fn)
-# only 1 beam box- remove extra dimension
-neut_halo.boxn0 = neut_halo.boxn0[:, :, :, 0]
-neut_halo.boxn0h0 = neut_halo.boxn0h0[:, :, :, 0]
-neut_halo.boxn0hh = neut_halo.boxn0hh[:, :, :, 0]
-neut_halo.total_neut = neut_halo.boxn0 + neut_halo.boxn0h0 + neut_halo.boxn0hh  # beam + 0 gen + higher gen neutrals (#/cm^3)
-fneut = RegularGridInterpolator((neut_halo.lbox, neut_halo.ybox, neut_halo.xbox), neut_halo.total_neut)
+ntot = np.sum(halo2d.flatten()) * dv  # total neuts in halo
+neut_fueled = fuel_2d / 100. * halo2d  # num/cm^3
+ntot_fuel = np.nansum(neut_fueled.flatten()) * dv  # total neuts fueled
+print(f'Ntot: {ntot}, Nfuel: {ntot_fuel} ({ntot_fuel / ntot * 100.}%)')
+
+fig, ((ax2, ax3), (ax1, ax4)) = plt.subplots(nrows=2, ncols=2, sharey='row', sharex='col')
+ax4.axis('off')
+c = ax1.contourf(eq_r2d, eq_z2d, fuel_2d * 100.)
+cb = fig.colorbar(c, ax=ax1)
+cb.set_label('Fueling (%)')
+# fig, ax2 = plt.subplots()
+c2 = ax2.contourf(eq_r2d, eq_z2d, halo2d)
+cb2 = fig.colorbar(c2, ax=ax2)
+cb2.set_label('Halo Neutral Density ($cm^-3$)')
+c3 = ax3.contourf(eq_r2d, eq_z2d, neut_fueled)
+cb3 = fig.colorbar(c3, ax=ax3)
+cb3.set_label('Halo fueling ($cm^-3$)')
+for ax in [ax1, ax2, ax3]:
+	# ax.axis('equal')
+	ax.set_xlabel('R (m)')
+	ax.set_ylabel('Z (m)')
+	ax.set_ylim((-.4, .4))
+
+plt.tight_layout()
+plt.show()
 
 if __name__ == '__main__':
 	pass

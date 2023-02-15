@@ -81,27 +81,40 @@ def plot_nbi_rawdata(shots):
 
 
 def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
+	if np.array([sh > 200000 for sh in shots]).all():
+		onlynbi = True
+	else:
+		onlynbi = False
 	if arc_iv:
-		fig, axs = plt.subplots(nrows=4, ncols=2, sharex=True)
-		((ax1, ax2), (ax3, ax4), (ax5, ax6), (ax7, ax8)) = axs
+		if onlynbi:
+			fig, axs = plt.subplots(nrows=3, ncols=2, sharex=True)
+			((ax3, ax4), (ax5, ax6), (ax7, ax8)) = axs
+		else:
+			fig, axs = plt.subplots(nrows=4, ncols=2, sharex=True)
+			((ax1, ax2), (ax3, ax4), (ax5, ax6), (ax7, ax8)) = axs
 		ax4r = ax4.twinx()
 		ax4.yaxis.set_visible(False)
 		ax3.set_ylabel('i_arc (A)')
 		ax4r.set_ylabel('v_arc (V)')
 	else:
-		fig, axs = plt.subplots(nrows=3, ncols=2, sharex=True)
-		((ax1, ax2), (ax5, ax6), (ax7, ax8)) = axs
+		if onlynbi:
+			fig, axs = plt.subplots(nrows=2, ncols=2, sharex=True)
+			((ax5, ax6), (ax7, ax8)) = axs
+		else:
+			fig, axs = plt.subplots(nrows=3, ncols=2, sharex=True)
+			((ax1, ax2), (ax5, ax6), (ax7, ax8)) = axs
 	for axrow in axs:
 		for ax in axrow:
 			ax.grid()
-	ax2r = ax2.twinx()
+	if not onlynbi:
+		ax2r = ax2.twinx()
+		ax2.yaxis.set_visible(False)
+		ax1.set_ylabel('ip (kA)')
+		ax2r.set_ylabel('$\int{n_e dl}$ (e18 $m^{-2}$)')
 	ax6r = ax6.twinx()
 	ax8r = ax8.twinx()
-	ax2.yaxis.set_visible(False)
 	ax6.yaxis.set_visible(False)
 	ax8.yaxis.set_visible(False)
-	ax1.set_ylabel('ip (kA)')
-	ax2r.set_ylabel('$\int{n_e dl}$ (e18 $m^{-2}$)')
 	ax5.set_ylabel('i_beam (A)')
 	ax6r.set_ylabel('v_beam (kV)')
 	ax7.set_ylabel('perveance (uPerv)')
@@ -109,7 +122,7 @@ def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
 	ax7.set_xlabel('time (s)')
 	ax8.set_xlabel('time (s)')
 	if nbi_win is not None:
-		ax1.set_xlim(nbi_win)
+		axs[0].set_xlim(nbi_win)
 	pav, vav, w = 0, 0, 0
 	for sh in shots:
 		if sh > 200000:
@@ -146,24 +159,18 @@ def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
 		else:
 			twin1, twin2 = min(t_beamon) - 2.e-3, max(t_beamon) + 2.e-3
 		
-		# perv = ibeam / vbeam ** 1.5 * 1.e6  # uPerv
-		# perv[np.where(vbeam <= v_thresh)] = np.nan
-		# else:
-		# 	tbeam, ibeam, vbeam, tarc, iarc, varc, perv = np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
 		pbeam = ibeam * vbeam / 1000.  # kW
 		iav = np.where(vbeam > v_thresh)
 		vav = (vav * w + np.mean(vbeam[iav])) / (w + 1)
 		pav = (pav * w + np.mean(pbeam[iav])) / (w + 1)
 		w += 1
 		if arc_iv:
-			ax3.plot(tarc, iarc)
-			ax4r.plot(tarc, varc)
-		ax5.plot(tbeam, ibeam)
-		# ax5.plot(tdec, iacc, '--')
-		# ax5.plot(tdec, iacc-idec, '-.')
-		ax6r.plot(tbeam, vbeam / 1000.)
-		ax7.plot(tbeam, perv)
-		ax8r.plot(tbeam, pbeam)
+			ax3.plot(tarc, iarc, label=sh)
+			ax4r.plot(tarc, varc, label=sh)
+		ax5.plot(tbeam, ibeam, label=sh)
+		ax6r.plot(tbeam, vbeam / 1000., label=sh)
+		ax7.plot(tbeam, perv, label=sh)
+		ax8r.plot(tbeam, pbeam, label=sh)
 		if not nbi_only and is_nbi_shot(sh, t):
 			(times, ip) = get_data(t, '.diagnostics.magnetic.ip_rog')
 			(times2, ne) = get_data(t, '.diagnostics.microwave.interferom.phase_comp.ne_l')  # [m^-2]
@@ -171,24 +178,19 @@ def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
 			ii = np.where((times >= twin1) & (times <= twin2))
 			i2 = np.where((times2 >= twin1) & (times2 <= twin2))
 			ax1.plot(times[ii], -ip[ii] / 1000., label=sh)
-			ax2r.plot(times2[i2], ne[i2])
-	# except:
-	# 	print('no tree found for shot {}'.format(sh))
-	ax1.legend(ncol=int(np.ceil(len(shots) / 7)))
-	# ax2.axis('off')
-	
-	vav /= 1000.
-	print('avg beam voltage: {:.1f} kV'.format(vav))
-	ax6r.axhline(vav, c='k', ls='--', alpha=0.5)
-	ax6r.annotate('<V>={:.1f}'.format(vav), (twin1, vav))
-	print('avg beam power: {:.1f} kW'.format(pav))
-	ax8r.axhline(pav, c='k', ls='--', alpha=0.5)
-	ax8r.annotate('<P>={:.1f}'.format(pav), (twin1, pav))
-	ax1.set_ylim(bottom=0.)
-	ax2r.set_ylim(bottom=0.)
+			ax2r.plot(times2[i2], ne[i2], label=sh)
+	if not onlynbi:
+		ax1.set_ylim(bottom=0.)
+		ax2r.set_ylim(bottom=0.)
+	axs[0][0].legend(ncol=int(np.ceil(len(shots) / 7)))
 
-
-# plt.grid(b=True, which='minor')
+	# vav /= 1000.
+	# print('avg beam voltage: {:.1f} kV'.format(vav))
+	# ax6r.axhline(vav, c='k', ls='--', alpha=0.5)
+	# ax6r.annotate('<V>={:.1f}'.format(vav), (twin1, vav))
+	# print('avg beam power: {:.1f} kW'.format(pav))
+	# ax8r.axhline(pav, c='k', ls='--', alpha=0.5)
+	# ax8r.annotate('<P>={:.1f}'.format(pav), (twin1, pav))
 
 
 def plot_nbi(shots):
@@ -409,8 +411,13 @@ if __name__ == '__main__':
 	late = [566,567,568,530] CAUTION- beam late! (TS at 465, 466)
 	weak-start = [603]
 	"""
-	# 106525,538,542,543
-	nbi_ops(106500 + np.array([25,38,42,43, 36]), nbi_win=[.455, .47], arc_iv=False)
+	
+	
+	gvc_psi = 511200 + np.array([162, 168, 80, 165, 126, 139, 153])  # psi: +4, +2, 0, -2, -4, -8, -12
+	gva_psi = 511200 + np.array([52, 64, 75, 81, 88, 95])  # psi: 0, -4, -8, -12, -16, -20
+	shts = 511300 + np.array([65, 67])
+	shts = gvc_psi
+	nbi_ops(shts, arc_iv=False)
 	# nbi_ops(106000 + np.array([606,554,555,556,551,553,525,538,542,543]), nbi_win=[.45, .478], arc_iv=False)
 	plt.show()
 	
