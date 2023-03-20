@@ -1,6 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import cm
+from wire_calorimeter.wire_controls import WireControls
+from wire_calorimeter.wire_integral import compute_fraction_to_wire_grid
+
+# todo: REWORK wire_integral to take in wire positions (assume same positioning in x and y) and return relevant values (including intercepted fraction) then import and use here for various wire spacing configurations
+# todo: Once we have intercept fraction for each spacing metric, compute "GOODNESS OF FIT" or something for each spacing metric
 
 """
 This routine is aimed at answering the question of how to optimally space wires in an array to both maximize resolution
@@ -15,36 +20,46 @@ distribution. Perhaps this p-value can act as our "good resolution" metric
 thoughts on 2)- see mapping below: uses linear change to gap- could investigate quadratic or other
 """
 
-clrs = plt.rcParams['axes.prop_cycle'].by_key()['color']
+plot_wire_locations = True
+plot_frac_v_wire_locations = True
+if plot_wire_locations:
+	fig, ax = plt.subplots()
+if plot_frac_v_wire_locations:
+	fig2, ax2 = plt.subplots()
 
-num_wires = 7
-half_gap = 12  # [cm] the aperture half-width
-fig, ax = plt.subplots()
-num_arrangements = 13
-cumsum = np.sum(np.arange(1, num_wires))  # sum from 0:num_wires-1
-ylim = half_gap * (num_wires - 1) / (num_wires ** 2 - num_wires - cumsum)  # when yo > ylim curve overshoots
-yo_arr = np.linspace(0, ylim, num=num_arrangements + 1, endpoint=True)
+c = WireControls()
+cumsum = np.sum(np.arange(1, c.nxwires))  # sum from 0:num_wires-1
+ylim = c.half_gap * (c.nxwires - 1) / (c.nxwires ** 2 - c.nxwires - cumsum)  # when yo > ylim curve overshoots
+# yo_arr is array of gap between center and first wire
+yo_arr = np.linspace(0, ylim, num=c.num_arrangements + 1, endpoint=True)
 yo_arr = yo_arr[1:-1]  # cut off 0 and ylim, others are equally spaced
-m_arr = (half_gap - num_wires * yo_arr) / cumsum
-for i in np.arange(len(yo_arr)):
-	cs = np.append([0], np.cumsum(yo_arr[i] + m_arr[i] * np.arange(0, num_wires)))
-	actual_wire_positions = cs[:-1]  # last point is at ygap, meant to ignore, included to make plot sensible
-	ax.plot(np.arange(0, num_wires + 1), cs, 'o-', label=f'{m_arr[i]:.2f}')
-ax.axhline(half_gap, c='k', ls='--')
-ax.set_xlabel('wire #')
-ax.set_ylabel('wire pos [cm]')
-ax.legend(title='metric')
-
-'''
-we have generation method above to get actual_wire_position arrays for various configurations
-need to compute a p-value or similar score for doing a "good job" at resolving gaussian
-'''
+m_arr = (c.half_gap - c.nxwires * yo_arr) / cumsum  # slope of linear change in wire spacing: metric defining spacing
 
 
+def wire_placements(metric):
+	yo = -(metric * cumsum - c.half_gap) / c.nxwires
+	cs = np.append([0], np.cumsum(yo + metric * np.arange(0, c.nxwires)))
+	actual_wire_positions = cs[:-1]
+	if plot_wire_locations:
+		ax.plot(np.arange(0, c.nxwires + 1), cs, 'o-', label=f'{metric:.2f}')
+	return actual_wire_positions
 
 
+frac_arr = np.array([])
+for m in m_arr:
+	wp = wire_placements(m)  # one sided wire placements
+	frac = compute_fraction_to_wire_grid(np.append(-wp[::-1], wp[1:]))
+	frac_arr = np.append(frac_arr, frac)
+if plot_frac_v_wire_locations:
+	ax2.plot(m_arr, frac_arr*100., 'o-')
+	ax2.set_xlabel('metric')
+	ax2.set_ylabel('intercept (%)')
 
-
+if plot_wire_locations:
+	ax.axhline(c.half_gap, c='k', ls='--')
+	ax.set_xlabel('wire #')
+	ax.set_ylabel('wire pos [cm]')
+	ax.legend(title='metric')
 
 plt.show()
 

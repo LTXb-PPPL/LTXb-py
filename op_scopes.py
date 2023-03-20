@@ -122,7 +122,7 @@ def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
 	ax7.set_xlabel('time (s)')
 	ax8.set_xlabel('time (s)')
 	if nbi_win is not None:
-		axs[0].set_xlim(nbi_win)
+		axs[0][0].set_xlim(nbi_win)
 	pav, vav, w = 0, 0, 0
 	for sh in shots:
 		if sh > 200000:
@@ -160,6 +160,10 @@ def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
 			twin1, twin2 = min(t_beamon) - 2.e-3, max(t_beamon) + 2.e-3
 		
 		pbeam = ibeam * vbeam / 1000.  # kW
+		dt = tbeam[1:]-tbeam[:-1]  # [s]
+		pcntr = (pbeam[1:]+pbeam[:-1])/2.*1000.  # avg power for each time bin [W]
+		einj = np.sum(dt*pcntr)  # [J] energy injected
+		print(f'shot {sh} Einj = {einj/1000.:.2f} [kJ]')
 		iav = np.where(vbeam > v_thresh)
 		vav = (vav * w + np.mean(vbeam[iav])) / (w + 1)
 		pav = (pav * w + np.mean(pbeam[iav])) / (w + 1)
@@ -184,13 +188,14 @@ def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
 		ax2r.set_ylim(bottom=0.)
 	axs[0][0].legend(ncol=int(np.ceil(len(shots) / 7)))
 
-	# vav /= 1000.
-	# print('avg beam voltage: {:.1f} kV'.format(vav))
-	# ax6r.axhline(vav, c='k', ls='--', alpha=0.5)
-	# ax6r.annotate('<V>={:.1f}'.format(vav), (twin1, vav))
-	# print('avg beam power: {:.1f} kW'.format(pav))
-	# ax8r.axhline(pav, c='k', ls='--', alpha=0.5)
-	# ax8r.annotate('<P>={:.1f}'.format(pav), (twin1, pav))
+
+# vav /= 1000.
+# print('avg beam voltage: {:.1f} kV'.format(vav))
+# ax6r.axhline(vav, c='k', ls='--', alpha=0.5)
+# ax6r.annotate('<V>={:.1f}'.format(vav), (twin1, vav))
+# print('avg beam power: {:.1f} kW'.format(pav))
+# ax8r.axhline(pav, c='k', ls='--', alpha=0.5)
+# ax8r.annotate('<P>={:.1f}'.format(pav), (twin1, pav))
 
 
 def plot_nbi(shots):
@@ -412,13 +417,8 @@ if __name__ == '__main__':
 	weak-start = [603]
 	"""
 	
-	
-	gvc_psi = 511200 + np.array([162, 168, 80, 165, 126, 139, 153])  # psi: +4, +2, 0, -2, -4, -8, -12
-	gva_psi = 511200 + np.array([52, 64, 75, 81, 88, 95])  # psi: 0, -4, -8, -12, -16, -20
-	shts = 511300 + np.array([65, 67])
-	shts = gvc_psi
-	nbi_ops(shts, arc_iv=False)
-	# nbi_ops(106000 + np.array([606,554,555,556,551,553,525,538,542,543]), nbi_win=[.45, .478], arc_iv=False)
+	shts = np.array([108238, 108239])
+	nbi_ops(shts, arc_iv=True, nbi_win=[.46, .48])
 	plt.show()
 	
 	# for sh in np.arange(509113,509340):
