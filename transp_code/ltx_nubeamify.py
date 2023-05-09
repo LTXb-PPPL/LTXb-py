@@ -5,10 +5,10 @@ import numpy as np
 import os
 from toolbox.helpful_stuff import is_nbi_shot, get_tree_conn, get_data
 
-
 '''
 For an updated version, look in ltx_beambot repo
 '''
+
 
 # def validate_nubeamify_inputs(dir, trdat, **kwargs):
 
@@ -20,7 +20,7 @@ def get_nbi_inputs_for_trdat(ltx_shots):
 	for shot in ltx_shots:
 		try:
 			t = get_tree_conn(shot, treename='ltx_b')
-			print('gathering data for shot {} occurred on {}'.format(shot, get_data(t, '.metadata:timestamp')))
+			# print('gathering data for shot {} occurred on {}'.format(shot, get_data(t, '.metadata:timestamp')))
 			if is_nbi_shot(shot, t):
 				(tibeam, ibeam) = get_data(t, '.oper_diags.ltx_nbi.source_diags.i_hvps')
 				(tbeam, vbeam) = get_data(t, '.oper_diags.ltx_nbi.source_diags.v_hvps')
@@ -38,7 +38,11 @@ def get_nbi_inputs_for_trdat(ltx_shots):
 	if max(ton) - min(ton) > 1.e-3:
 		print('discrepancy in beam turnon times, returning.')
 		return [np.nan]
-	return [np.mean(einj), np.mean(pinj), np.mean(ton), np.mean(toff)]
+	transmission_efficiency = 0.9  # fraction not lost along beam path into vessel
+	neutralization_efficiency = 0.8  # fraction neutralized in neutralizer
+	power_into_vessel = np.mean(pinj) * transmission_efficiency * neutralization_efficiency
+	print(f'shot {shot} <Einj> = {np.mean(einj) / 1000.:.2f} [keV] occurred {get_data(t,".metadata: timestamp")}')
+	return [np.mean(einj), power_into_vessel, np.mean(ton), np.mean(toff)]
 
 
 def copy_content(fromfile, tofile):
@@ -192,6 +196,8 @@ def ltx_nubeamify(dir, trdat, **kwargs):
 
 
 if __name__ == '__main__':
-	dir = 'Z:/transp/t105952/'
-	trdat = '105952A01TR.DAT'
-	ltx_nubeamify(dir, trdat, ltx_shots=[105952], output_file_letter='c')
+	dir = 'Z:/transp/t108487/'
+	trdat = '108487A01TR.DAT'
+	ltx_nubeamify(dir, trdat,
+	              ltx_shots=[108487, 108478, 108486, 108490, 108479, 108482, 108483, 108471, 108474, 108509, 108509,
+	                         108495, 108498, 108475, 108492, 108499], output_file_letter='c')
