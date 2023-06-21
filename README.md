@@ -43,21 +43,25 @@ To create a new interpreter for this project (recommended)
 - Select `Conda Environemnt` on the left, `New Environment` on the right, and select Python version 3.7
 - Click `OK` to create a basic interpreter
 
-The repo contains a requirements.txt file, so after assigning it an interpreter it will display a banner across the top of the code window if any dependencies are missing. Install any missing dependencies (this may take a while).
+The repo contains a yml file, so after assigning it an interpreter, update the interpreter with the yml requirements as follows
+- open Anaconda prompt (anaconda into windows search bar)
+- navigate to repo directory
+- `conda activate ltxb-py_env`
+- `conda env update --file ltxb-py_env.yml --prune`
 
-###### Updating requirements.txt
-***NOTE***: This will document ***all*** the packages installed in your interpreter. To keep things clean, please create a unique interpreter for this project as detailed above and install ***only*** the dependencies necessary as listed in requirements.txt. If you then need new dependencies due to changes you've made to the repo you can update requirements.txt so that other users can easily update their interpreters.
+###### Updating yml file
+***NOTE***: This will document ***all*** the packages installed in your interpreter. To keep things clean, please create a unique interpreter for this project as detailed above and install ***only*** the dependencies necessary as listed in yml file. If you then need new dependencies due to changes you've made to the repo you can update the yml so that other users can easily update their interpreters.
 To do this:
 - open Anaconda prompt (anaconda into windows search bar)
 - navigate to repo directory (Z:\PyCharmProjects\LTXb-py\ for example)
-- `conda activate <interpreter name>`
-- `pip list --format=freeze > requirements.txt`
+- `conda activate ltxb-py_env`
+- `conda env export>ltxb-py_env.yml`
 
 ###### Adding packages
 Editing and adding new routines might require adding new python packages to the interpreter. PyCharm is often smart enough to do this from the IDE. If, for example, you try `import numpy as np` and numpy isn't installed, you can click on the red squiggle and PyCharm will give you the option to install.
 Not all packages are available this way, however. Alternate methods mimic the steps above:
 - open Ananconda prompt
-- `conda activate <interpreter name>`
+- `conda activate ltxb-py_env`
 - try: `pip install <package name>` or `conda install <package name>`
 
 ###### MDSplus
