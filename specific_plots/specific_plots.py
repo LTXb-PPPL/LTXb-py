@@ -354,6 +354,9 @@ def tangency_scan_105952_105795():
 		f'\nkW increase from:\n21->24: {(t24 / t21 - 1) * 100.:.1f}%\n24->33: {(t33 / t24 - 1) * 100.:.1f}%\n24->35: {(t35 / t24 - 1) * 100.:.1f}%\n33->35: {(t35 / t33 - 1) * 100.:.1f}%\n')
 	print(
 		f'\nNtot increase from:\n21->24: {(tt24 / tt21 - 1) * 100.:.1f}%\n24->33: {(tt33 / tt24 - 1) * 100.:.1f}%\n24->35: {(tt35 / tt24 - 1) * 100.:.1f}%\n33->35: {(tt35 / tt33 - 1) * 100.:.1f}%\n')
+	print(
+		f'\nkW increase from 21->35: {(t35 / t21 - 1) * 100.:.1f}%\nNtot increase from 21->35: {(tt35 / tt21 - 1) * 100.:.1f}%\n')
+	
 	fig, (ax1, ax2) = plt.subplots(ncols=2)
 	ax1.plot(rtans, dat[0, 0, :], label='105795')
 	ax2.plot(rtans, dat[0, 1, :])
@@ -415,8 +418,8 @@ def aps_2022_beam_heating():
 
 
 if __name__ == '__main__':
-	aps_2022_beam_heating()
-# tangency_scan_105952_105795()
+	# aps_2022_beam_heating()
+	tangency_scan_105952_105795()
 # santanu_sigs()
 # beam_nobeam_103446_465()
 # shot_analysis_01mar22()

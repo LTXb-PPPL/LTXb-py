@@ -447,13 +447,6 @@ def read_eqdsk2(filename, plot=False):
 	return eqdsk_obj
 
 
-def make_patch_spines_invisible(ax):
-	ax.set_frame_on(True)
-	ax.patch.set_visible(False)
-	for sp in ax.spines.values():
-		sp.set_visible(False)
-
-
 def ltx_limiter(plot=False):
 	'''
 	myFile = fopen('ltx_limiter.txt','r');

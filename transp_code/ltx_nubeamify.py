@@ -20,6 +20,7 @@ def get_nbi_inputs_for_trdat(ltx_shots):
 	for shot in ltx_shots:
 		try:
 			t = get_tree_conn(shot, treename='ltx_b')
+			ts = get_data(t, '.metadata:timestamp')
 			# print('gathering data for shot {} occurred on {}'.format(shot, get_data(t, '.metadata:timestamp')))
 			if is_nbi_shot(shot, t):
 				(tibeam, ibeam) = get_data(t, '.oper_diags.ltx_nbi.source_diags.i_hvps')
@@ -30,19 +31,21 @@ def get_nbi_inputs_for_trdat(ltx_shots):
 				ii = np.where((tbeam >= tbeamon + pad) & (tbeam <= tbeamoff - pad))
 				einj = np.append(einj, np.mean(vbeam[ii]))
 				pinj = np.append(pinj, np.mean(vbeam[ii] * ibeam[ii]))
+				print(
+					f'shot {shot} <Einj> = {np.mean(einj) / 1000.:.2f} [keV] occurred {ts}')
 			else:
 				print(f'shot {shot} is not an NBI shot- omitting')
 		except:
 			print(f'problem occurred gathering data for shot {shot}: returning')
 			return [np.nan]
+	checkshots = False
 	if max(ton) - min(ton) > 1.e-3:
-		print('discrepancy in beam turnon times, returning.')
-		return [np.nan]
+		print('discrepancy in beam turnon times, check shots')
+		checkshots = True
 	transmission_efficiency = 0.9  # fraction not lost along beam path into vessel
 	neutralization_efficiency = 0.8  # fraction neutralized in neutralizer
 	power_into_vessel = np.mean(pinj) * transmission_efficiency * neutralization_efficiency
-	print(f'shot {shot} <Einj> = {np.mean(einj) / 1000.:.2f} [keV] occurred {get_data(t,".metadata: timestamp")}')
-	return [np.mean(einj), power_into_vessel, np.mean(ton), np.mean(toff)]
+	return [np.mean(einj), power_into_vessel, np.mean(ton), np.mean(toff), checkshots]
 
 
 def copy_content(fromfile, tofile):
@@ -57,9 +60,13 @@ def copy_content(fromfile, tofile):
 	writeto.close()
 
 
-def get_beam_dict(eb, pb, twin):
+def get_beam_dict(eb, pb, twin, ltx_shots):
 	ts = datetime.datetime.today()
-	bhead = '!==================================================\n! Neutral Beam\n! http://w3.pppl.gov/~pshare/help/body_transp_hlp.html#outfile196.html\n! Written by ltx_neubeamify.py on {ts.strftime("%m/%d/%Y at %I:%M%p")}\n!==================================================\n'
+	if ltx_shots[0] != -1:
+		addline = f'! beam parameters set using LTX shots {ltx_shots}'
+	else:
+		addline = '! beam parameters set manually by human input'
+	bhead = f'!==================================================\n! Neutral Beam\n! http://w3.pppl.gov/~pshare/help/body_transp_hlp.html#outfile196.html\n! Written by ltx_neubeamify.py on {ts.strftime("%m/%d/%Y at %I:%M%p")}\n{addline}\n!==================================================\n'
 	bdict = {'NLBCCW': '.T       ! .T for CCW BT',
 	         'NLJCCW': '.F       ! .T for CCW Ip',
 	         'SELAVG': "'FBM BDENS2 BDENSS3 BMVOL EBA2PL EBA2PP' !quantities	to average",
@@ -69,7 +76,7 @@ def get_beam_dict(eb, pb, twin):
 	         'NLBGFLR': '.T',
 	         'NLNBI_TEST_OUT': '.F',
 	         'DN0OUT': '5.E10       ! external neutral density in cm ** -3',
-	         'NPTCLS': '10000      ! no.of MC ptcls',
+	         'NPTCLS': '50000      ! no.of MC ptcls',
 	         'NMCURB': '3      ! Use Lin - Liu & Hinton model',
 	         'NPRAD': '2',
 	         'NLBEAM': '.T',
@@ -101,7 +108,7 @@ def get_beam_dict(eb, pb, twin):
 	         'ABEAMA(1)': '1.         !The atomic weight of the injected species (ie Hydrogen)',
 	         'XZBEAMA(1)': '1.         !The charge of the injected species (seems like it would be 0?)',
 	         'PDELTA(1)': '0.001    !Has no meaning, retained for compatibility',
-	         'RTCENA(1)': '21.3     !Beam tangency radius in centimeters',
+	         'RTCENA(1)': '24.0     !Beam tangency radius in centimeters',
 	         'XLBAPA(1)': '189.1    !Distance of ion source to beam aperture',
 	         'XLBTNA(1)': '257.0    !The distance between the bean ion source and the tangecy radius',
 	         'FFULLA(1)': '0.8     !The percent fraction of full energy particles accelerated ie H ^ +',
@@ -155,9 +162,11 @@ def ltx_nubeamify(dir, trdat, **kwargs):
 			return
 	
 	# ensure ebeam, pbeam defined
+	ltx_shots = [-1]
 	if 'ltx_shots' in kwargs.keys():
+		ltx_shots = kwargs['ltx_shots']
 		ep_inj = get_nbi_inputs_for_trdat(kwargs['ltx_shots'])
-		if len(ep_inj) != 4:
+		if len(ep_inj) != 5:
 			return
 		else:
 			kwargs['ebeam'], kwargs['pbeam'] = ep_inj[0], ep_inj[1]
@@ -165,6 +174,12 @@ def ltx_nubeamify(dir, trdat, **kwargs):
 			kwargs['twin'] = [ep_inj[2], ep_inj[3]]
 	if 'ibeam' in kwargs.keys():
 		kwargs['pbeam'] = kwargs['ebeam'] * kwargs['ibeam']
+	if ep_inj[4]:  # check shots
+		gohead = input(f'Discrepancy found in beam timing, is shotlist correct? (y/n)')
+		if 'n' in gohead:
+			return
+		else:
+			print('okay, proceeding...')
 	
 	# ensure output_file_letter defined
 	if 'output_file_letter' not in kwargs.keys():
@@ -190,7 +205,7 @@ def ltx_nubeamify(dir, trdat, **kwargs):
 	# create new file
 	copy_content(f'{dir}{trdat}', f'{dir}{trdat_out}')
 	
-	bhead, bdict = get_beam_dict(kwargs['ebeam'], kwargs['pbeam'], kwargs['twin'])
+	bhead, bdict = get_beam_dict(kwargs['ebeam'], kwargs['pbeam'], kwargs['twin'], ltx_shots)
 	update_with_nbi(f'{dir}{trdat_out}', bdict, bhead)
 	print(f'\nTR.DAT FILE WRITTEN:\n{dir}{trdat_out} is ready to be submitted...\n')
 
@@ -199,5 +214,5 @@ if __name__ == '__main__':
 	dir = 'Z:/transp/t108487/'
 	trdat = '108487A01TR.DAT'
 	ltx_nubeamify(dir, trdat,
-	              ltx_shots=[108487, 108478, 108486, 108490, 108479, 108482, 108483, 108471, 108474, 108509, 108509,
-	                         108495, 108498, 108475, 108492, 108499], output_file_letter='c')
+	              ltx_shots=[108487, 108478, 108486, 108490, 108479, 108482, 108483, 108471, 108474, 108509, 108495,
+	                         108498, 108475, 108492, 108499], output_file_letter='c')

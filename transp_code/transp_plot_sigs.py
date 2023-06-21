@@ -13,7 +13,7 @@ def plot_sig(sig='.inputs.ter', shot=1000030301, ax=None):
 
 
 if __name__ == '__main__':
-	shts = [1074580301]  # 1074580301,
+	shts = [1083040301]  # 1074580301,
 	sigs = ['\\pinj', '\\bpcap', '\\bplim', '\\bdens', '\\bphto', '\\pbe', '\\bpshi']
 	# sigs = ['\\bale0']
 	print(f'thinking...')
