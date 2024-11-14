@@ -211,8 +211,7 @@ def ltx_nubeamify(dir, trdat, **kwargs):
 
 
 if __name__ == '__main__':
-	dir = 'Z:/transp/t108487/'
-	trdat = '108487A01TR.DAT'
+	dir = 'Z:/transp/t108886/'
+	trdat = '108886A01TR.DAT'
 	ltx_nubeamify(dir, trdat,
-	              ltx_shots=[108487, 108478, 108486, 108490, 108479, 108482, 108483, 108471, 108474, 108509, 108495,
-	                         108498, 108475, 108492, 108499], output_file_letter='c')
+	              ltx_shots=[108886, 108887, 108890, 108880, 108874, 108881, 108895, 108891, 108876, 108875, 108894], output_file_letter='c')

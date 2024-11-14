@@ -5,16 +5,17 @@ from toolbox.helpful_stuff import smooth
 
 clrs = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
-nobeam = [1083030101, 1083680101, 1084260101, 1084880101]
-beam = [1083040301, 1084350301, 1083690301, 1084870301]
-nobeam = [1084880101]
-beam = [1084870301]
-mrks = ['s', 'v', 'o', 'd']
+# ltx_shots_nobeam = [108889, 108878, 108883, 108877, 108882, 108879, 108888, 108893, 108896, 108892, 108873]
+# ltx_shots_beam = [108886, 108887, 108890, 108880, 108874, 108881, 108895, 108891, 108876, 108875, 108894]
+# transp_nobeam = [1088890101]
+transp_nobeam = [1088860101]
+transp_beam = [1088860301]
+mrks = ['', 's', 'v', 'o', 'd']
 fig, (ax1, ax2) = plt.subplots(nrows=2, sharex='col', figsize=(5, 5))
 hndls = []
-markevery=10
+markevery = 10
 shft = 2
-for i, shot in enumerate(nobeam):
+for i, shot in enumerate(transp_nobeam):
 	c = 'k'
 	ip = SimpleSignal(shot, '\\pcur')
 	poh = SimpleSignal(shot, '\\poht')
@@ -23,7 +24,7 @@ for i, shot in enumerate(nobeam):
 	ax1.plot(poh.dim1[shft * i:] * 1.e3, pohs[shft * i:], '--', c=c, marker=mrks[i], markevery=10)
 	h, = ax1.plot(np.nan, np.nan, c=c, marker=mrks[i], label=f'{shot}')
 	hndls.append(h)
-for i, shot in enumerate(beam):
+for i, shot in enumerate(transp_beam):
 	c = 'r'
 	pinj = SimpleSignal(shot, '\\pinj')
 	pb = SimpleSignal(shot, '\\bpcap')

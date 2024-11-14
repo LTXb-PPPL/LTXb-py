@@ -346,6 +346,32 @@ def tabulated_eimpact_ionization(Eb, Te, plot=False):
 		raise TypeError
 
 
+def tabulated2_eimpact_ionization(Te, plot=False):
+	# like tabulated_eimpact_ionization but returns cx (cm^2) vs energy given Te
+	# need reference.
+	# convert from keV to eV
+	if Te < 1:
+		print(f'interpreting {Te} as {Te}keV')
+		Te *= 1000.
+	
+	eb_val, te_val, sigmav = eimpact_data()
+	
+	if Te > 5000:
+		print('Te > 5000eV, out of range')
+		return 0
+	
+	ik = min(np.where(Te <= te_val)[0])
+	te_h = te_val[ik]
+	te_l = te_val[ik - 1]
+	sigma_v_h = sigmav[ik, :]
+	sigma_v_l = sigmav[ik - 1, :]
+	sigv = (sigma_v_h-sigma_v_l)*(Te-te_l)/(te_h-te_l)+sigma_v_l
+	velocity = np.sqrt(2. * qe * eb_val / mi)
+	velocity = velocity * 100.  # [cm/s]
+	sigma = sigv/velocity  # [cm^2]
+	return eb_val, sigma  # [eV], [cm^2]
+
+
 def tabulated_i_ch_ex_ionization(Eb, mb, retrn='sigmav'):
 	if retrn not in ['sigmav', 'sigma']:
 		raise ValueError('retrn keyword must be "sigmav" or "sigma"')
@@ -620,9 +646,9 @@ if __name__ == '__main__':
 	# tabulated_i_ch_ex_ionization([16000.], 1.)
 	# tabulated_eimpact_ionization(16000., 150, plot=True)
 	# tabulated_iimpact_ionization([16000.], 1.)
-	# fueling_vs_beam_energy()
+	fueling_vs_beam_energy()
 	# adas_cx_cross_sections()
-	plot_rate_coeffs()
-	plot_eimpact_rate_coeffs()
-	mean_free_path()
+	# plot_rate_coeffs()
+	# plot_eimpact_rate_coeffs()
+	# mean_free_path()
 	plt.show()

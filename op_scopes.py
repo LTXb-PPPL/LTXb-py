@@ -163,7 +163,7 @@ def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
 		dt = tbeam[1:] - tbeam[:-1]  # [s]
 		pcntr = (pbeam[1:] + pbeam[:-1]) / 2. * 1000.  # avg power for each time bin [W]
 		einj = np.sum(dt * pcntr)  # [J] energy injected
-		print(f'shot {sh} Einj = {einj / 1000.:.2f} [kJ]')
+		print(f'shot {sh} Einj = {einj / 1000.:.2f} [kJ], <Pb> = {pbeam} kW, <Ib> = {ibeam} A')
 		iav = np.where(vbeam > v_thresh)
 		vav = (vav * w + np.mean(vbeam[iav])) / (w + 1)
 		pav = (pav * w + np.mean(pbeam[iav])) / (w + 1)
@@ -417,8 +417,9 @@ if __name__ == '__main__':
 	weak-start = [603]
 	"""
 	
-	check = np.array([106536, 108850])
-	nbi_ops(check, arc_iv=True, nbi_win=[.44, .5])
+	check = np.array([506587])#, 108887, 108890, 108880, 108874, 108881, 108895, 108891, 108876, 108875, 108894])
+	# nbi_ops(check, arc_iv=True, nbi_win=[.44, .5])
+	plot_nbi_rawdata([506648])
 	plt.show()
 	
 	# for sh in np.arange(509113,509340):

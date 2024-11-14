@@ -1481,7 +1481,7 @@ def power_to_calorimeter_check_26aug22():
 
 if __name__ == '__main__':
 	# perveance_scan_7feb22(plot_vs='FWHM')
-	# new_valve_data()
+	# --new_valve_data()
 	# new_valve_cathode()
 	# new_valve_neutralizer()
 	# offcenter = 508397
@@ -1495,13 +1495,13 @@ if __name__ == '__main__':
 	# compare_neutralizer_onoff()
 	# perveance_scan_7feb22(plot_vs='fwhm')
 	# perveance_scan_28feb22()
-	# neutralization_scan_7feb22()
+	# neutralization_scan_7feb22()  # <--------------------
 	# realigned_beam_4feb22()
 	# gauss2d_integral(2, inspect=True)
 	# cal_gauss_fit([105048])  # 65
 	# calorimeter_positional_variation()
-	beam_realignment()
+	# beam_realignment()
 	# calorimeter_21Jan()  # coincides w/settings used for 14Jan Perveance scan
 	# perveance_scan_29Jun22()
-	# power_to_calorimeter_check_26aug22()
+	power_to_calorimeter_check_26aug22()
 	plt.show()

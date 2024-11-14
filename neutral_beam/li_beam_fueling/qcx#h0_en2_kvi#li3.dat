@@ -1,0 +1,160 @@
+Li+ 3     H + 0 (2) / receiver, donor (donor state n=2)       /        /
+    9               / number of energies
+    3               / nmin
+    7               / nmax
+               0.01     0.02     0.05     0.10     0.20     0.50     1.00     2.00     5.00 / energies         (keV/amu)
+              17.50    17.50    17.50    17.30    16.70    13.82    11.47     9.50     6.32 / alpha
+           1.92E-14 1.94E-14 1.97E-14 1.95E-14 1.97E-14 2.15E-14 2.16E-14 2.22E-14 2.19E-14 / total xsects.    (cm2)
+  n  l  m                                                                                   / partial xsects.  (cm2)
+  3        3.17E-19 4.75E-19 1.58E-18 4.12E-18 7.60E-18 3.34E-17 6.59E-17 1.63E-16 2.99E-16
+  3  0     1.58E-19 1.58E-19 6.33E-19 2.06E-18 3.33E-18 4.91E-18 7.92E-18 2.31E-17 4.20E-17
+  3  1     0.00E+00 3.17E-19 9.50E-19 1.27E-18 1.74E-18 1.49E-17 2.69E-17 6.67E-17 1.04E-16
+  3  2     1.58E-19 0.00E+00 0.00E+00 7.92E-19 2.53E-18 1.36E-17 3.10E-17 7.30E-17 1.54E-16
+  4        3.54E-15 4.46E-15 5.55E-15 6.26E-15 7.24E-15 8.46E-15 8.69E-15 7.46E-15 5.67E-15
+  4  0     2.36E-16 3.28E-16 4.11E-16 4.78E-16 5.65E-16 3.96E-16 3.09E-16 2.63E-16 1.12E-16
+  4  1     7.57E-16 9.96E-16 1.30E-15 1.49E-15 1.65E-15 1.27E-15 1.06E-15 1.06E-15 5.96E-16
+  4  2     1.27E-15 1.59E-15 1.98E-15 2.20E-15 2.38E-15 2.47E-15 2.20E-15 2.25E-15 1.71E-15
+  4  3     1.27E-15 1.55E-15 1.87E-15 2.10E-15 2.65E-15 4.33E-15 5.13E-15 3.89E-15 3.25E-15
+  5        1.55E-14 1.47E-14 1.36E-14 1.26E-14 1.17E-14 1.16E-14 1.11E-14 1.18E-14 1.08E-14
+  5  0     1.64E-15 1.53E-15 1.16E-15 9.32E-16 8.26E-16 6.78E-16 4.81E-16 2.62E-16 7.05E-17
+  5  1     4.21E-15 3.94E-15 3.11E-15 2.50E-15 2.25E-15 1.91E-15 1.40E-15 8.75E-16 3.73E-16
+  5  2     5.14E-15 4.80E-15 4.19E-15 3.64E-15 3.18E-15 2.82E-15 2.33E-15 1.80E-15 1.12E-15
+  5  3     3.77E-15 3.57E-15 3.74E-15 3.56E-15 3.31E-15 3.32E-15 3.22E-15 3.21E-15 2.77E-15
+  5  4     7.81E-16 8.90E-16 1.36E-15 1.95E-15 2.17E-15 2.87E-15 3.72E-15 5.66E-15 6.52E-15
+  6        4.31E-17 1.72E-16 5.64E-16 6.25E-16 6.70E-16 1.16E-15 1.18E-15 1.94E-15 3.34E-15
+  6  0     7.76E-18 4.43E-18 3.64E-18 8.39E-18 1.27E-17 4.07E-17 5.40E-17 9.55E-17 3.85E-17
+  6  1     6.97E-18 5.54E-18 1.05E-17 1.65E-17 3.31E-17 1.18E-16 1.68E-16 2.77E-16 1.83E-16
+  6  2     8.23E-18 1.76E-17 3.23E-17 4.39E-17 6.41E-17 2.03E-16 2.79E-16 4.42E-16 4.44E-16
+  6  3     1.14E-17 4.31E-17 8.11E-17 1.08E-16 1.13E-16 2.81E-16 3.29E-16 4.88E-16 8.02E-16
+  6  4     7.28E-18 6.63E-17 1.79E-16 1.71E-16 1.88E-16 2.89E-16 2.51E-16 4.33E-16 1.07E-15
+  6  5     1.43E-18 3.53E-17 2.58E-16 2.76E-16 2.58E-16 2.28E-16 1.01E-16 2.01E-16 8.00E-16
+  7        9.50E-18 1.43E-17 2.00E-17 3.14E-17 4.70E-17 1.66E-16 4.07E-16 4.52E-16 8.44E-16
+  7  0     1.27E-18 7.92E-19 1.58E-19 4.75E-19 6.33E-19 5.23E-18 2.03E-17 2.33E-17 3.04E-17
+  7  1     1.43E-18 1.11E-18 6.33E-19 1.11E-18 1.58E-18 1.38E-17 5.81E-17 7.70E-17 9.87E-17
+  7  2     7.92E-19 1.74E-18 1.27E-18 2.69E-18 2.69E-18 1.87E-17 8.71E-17 9.79E-17 1.52E-16
+  7  3     2.22E-18 9.50E-19 2.69E-18 3.17E-18 6.49E-18 2.95E-17 9.15E-17 8.87E-17 1.94E-16
+  7  4     2.22E-18 2.85E-18 1.74E-18 4.43E-18 1.05E-17 3.48E-17 7.35E-17 7.46E-17 1.66E-16
+  7  5     9.50E-19 3.80E-18 5.23E-18 6.02E-18 1.25E-17 3.78E-17 5.48E-17 6.16E-17 1.11E-16
+  7  6     6.33E-19 3.01E-18 8.23E-18 1.35E-17 1.27E-17 2.58E-17 2.15E-17 2.95E-17 9.25E-17
+    9               / number of energies
+    3               / nmin
+    7               / nmax
+              10.00    15.00    20.00    25.00    30.00    40.00    50.00    75.00   100.00 / energies         (keV/amu)
+               3.64     2.16     1.73     1.61     1.64     1.87     2.07     2.31     2.43 / alpha
+           1.74E-14 1.07E-14 5.85E-15 3.03E-15 1.64E-15 5.67E-16 2.42E-16 4.66E-17 1.44E-17 / total xsects.    (cm2)
+  n  l  m                                                                                   / partial xsects.  (cm2)
+  3        4.74E-16 4.72E-16 3.17E-16 2.07E-16 1.45E-16 6.96E-17 3.75E-17 9.48E-18 3.23E-18
+  3  0     5.08E-17 3.13E-17 1.92E-17 1.13E-17 6.93E-18 3.28E-18 2.32E-18 6.28E-19 2.49E-19
+  3  1     1.62E-16 1.48E-16 9.02E-17 5.63E-17 3.65E-17 1.65E-17 9.48E-18 2.73E-18 1.08E-18
+  3  2     2.61E-16 2.93E-16 2.08E-16 1.40E-16 1.01E-16 4.99E-17 2.57E-17 6.11E-18 1.90E-18
+  4        3.34E-15 1.73E-15 8.65E-16 4.43E-16 2.59E-16 9.75E-17 4.31E-17 8.49E-18 2.56E-18
+  4  0     4.77E-17 2.62E-17 1.86E-17 1.16E-17 7.31E-18 3.14E-18 1.66E-18 4.60E-19 1.72E-19
+  4  1     2.73E-16 1.32E-16 7.70E-17 5.23E-17 3.13E-17 1.34E-17 7.17E-18 1.90E-18 6.90E-19
+  4  2     8.77E-16 4.49E-16 2.33E-16 1.25E-16 7.66E-17 3.01E-17 1.47E-17 3.45E-18 1.14E-18
+  4  3     2.15E-15 1.12E-15 5.36E-16 2.54E-16 1.43E-16 5.09E-17 1.96E-17 2.68E-18 5.50E-19
+  5        4.72E-15 2.04E-15 9.72E-16 4.68E-16 2.53E-16 8.60E-17 3.57E-17 6.19E-18 1.71E-18
+  5  0     3.66E-17 2.33E-17 1.63E-17 9.08E-18 5.61E-18 2.50E-18 1.25E-18 3.09E-19 1.07E-19
+  5  1     1.94E-16 1.08E-16 6.21E-17 3.98E-17 2.36E-17 9.72E-18 5.24E-18 1.31E-18 4.51E-19
+  5  2     5.72E-16 2.97E-16 1.69E-16 9.37E-17 5.72E-17 2.05E-17 1.02E-17 2.14E-18 6.83E-19
+  5  3     1.37E-15 5.98E-16 2.92E-16 1.46E-16 8.32E-17 2.93E-17 1.25E-17 2.07E-18 4.56E-19
+  5  4     2.55E-15 1.02E-15 4.33E-16 1.80E-16 8.37E-17 2.38E-17 6.46E-18 3.61E-19 1.55E-20
+  6        3.35E-15 1.66E-15 8.20E-16 4.02E-16 2.06E-16 6.71E-17 2.71E-17 4.42E-18 1.17E-18
+  6  0     2.85E-17 1.69E-17 1.02E-17 8.15E-18 5.88E-18 1.88E-18 1.01E-18 2.15E-19 7.32E-20
+  6  1     1.40E-16 8.14E-17 5.28E-17 3.17E-17 1.92E-17 7.83E-18 3.84E-18 8.90E-19 2.89E-19
+  6  2     4.23E-16 2.37E-16 1.26E-16 7.34E-17 4.00E-17 1.47E-17 6.75E-18 1.47E-18 4.41E-19
+  6  3     8.46E-16 4.01E-16 2.05E-16 1.07E-16 5.67E-17 2.00E-17 8.55E-18 1.40E-18 3.37E-19
+  6  4     1.08E-15 5.50E-16 2.75E-16 1.24E-16 6.19E-17 1.94E-17 6.42E-18 4.43E-19 3.17E-20
+  6  5     8.33E-16 3.76E-16 1.51E-16 5.81E-17 2.23E-17 3.34E-18 4.89E-19 3.75E-21 9.50E-22
+  7        1.91E-15 1.19E-15 6.18E-16 3.16E-16 1.60E-16 4.97E-17 1.99E-17 3.05E-18 8.04E-19
+  7  0     1.95E-17 1.34E-17 8.69E-18 5.66E-18 4.40E-18 1.56E-18 7.55E-19 1.61E-19 5.51E-20
+  7  1     1.08E-16 6.57E-17 4.35E-17 2.70E-17 1.54E-17 5.55E-18 2.98E-18 6.09E-19 2.19E-19
+  7  2     2.99E-16 1.74E-16 9.85E-17 5.73E-17 3.05E-17 1.09E-17 5.16E-18 9.90E-19 2.90E-19
+  7  3     4.91E-16 2.76E-16 1.50E-16 7.68E-17 4.26E-17 1.41E-17 5.82E-18 9.67E-19 2.17E-19
+  7  4     5.58E-16 3.58E-16 1.77E-16 9.02E-17 4.29E-17 1.36E-17 4.71E-18 3.18E-19 2.09E-20
+  7  5     3.98E-16 2.81E-16 1.32E-16 5.75E-17 2.42E-17 3.94E-18 5.13E-19 2.25E-21 1.58E-21
+  7  6     3.37E-17 2.72E-17 8.28E-18 1.28E-18 1.65E-19 0.00E+00 0.00E+00 0.00E+00 0.00E+00
+C-----------------------------------------------------------------------------------------------------
+C  Source:  The data consists of results of CTMC calculations made at the University of Missouri over 
+C              the period 1995-97.
+C     
+C  Comments:  At this time, no direct comparison with other results is available for checking the 
+C             quality of the nl selective cross-sections except for Li+3 for which results are given
+C             in a recent hidden curve crossing calculation by Janev et al. (1996).  Large differences
+C             are observed in both the magnitude and energy dependence.  From inspection of the total
+C             cross-sections, we have the strong impression that the CTMC data should be preferred.
+C             In a plot of the scaled total one-electron capture cross-sections (sigma_tot(16q)^-1)
+C             versus scaled energy (4Eq^-1/2), the total cross-sections should be approximately the
+C             same for all systems (Janev, 1991) at least for q>3.  In these scaled units, a 
+C             recommendation by Janev and Smith (1995) has been presented.  The CTMC data are all close 
+C             to this curve except at lower energies.  The hidden curve crossing data for Li+3 deviate
+C             from this curve.  Molecular orbital calculations by Errea et al. (1996) for B+5 are in
+C             good agreement with the corresponding CTMC data.  For He+2, the recommendation of Janev
+C             and Smith is based on the calculations of Harel and Jouin (1990) and it is completely
+C             different from the CTMC results for He+2, especially at the lower energies.  A reason
+C             for this huge difference is hard to see.  It may be the extremely strong resonant 
+C             nature of the electron capture at low collision energies.  Resonant transfer from H(n=2)
+C             in collsions with He+2 would necessarily mean that the electron ends up exactly between
+C             the n=3 and n=4 levels of He+1.  Therefore electron capture may be blocked. To what extent
+C             this is well described by the CTMC method is still a point of discussion.  For higher
+C             charged receiver ions, levels are resonantly present.  Except for He+2 at low energies, 
+C             we recommend use of the present CTMC data. 
+C
+C             The data was assembled as ADAS data files of type adf01 at JET Joint Undertaking in the
+C             period 2-3 June 1997.    
+C
+C  Authors:  F. W. Bliek*, R. Hoekstra*, R. E. Olson#
+C                  * KVI, Groningen, Netherlands
+C                  # University of Missouri, Rolla, USA. 
+C
+C  Date:  9 June 1997.
+C
+C  Updates: 
+C
+C-----------------------------------------------------------------------------------------------------
+ 
+ 
+C---------------------------------------------------------------------------------
+C ADAS ADF01 DATA - SCCS info: @(#)$Header: /home/adascvs/adas/adf01/qcx#h0/qcx#h0_en2_kvi#li3.dat,v 2.2 2007/11/27 14:06:51 mog Exp $ Date $Date: 2007/11/27 14:06:51 $
+C---------------------------------------------------------------------------------
+
+C-----------------------------------------------------------------------
+C                               OPEN-ADAS
+C                               +++++++++
+C
+C This file has been downloaded from OPEN-ADAS (http://open.adas.ac.uk)
+C on 23-Jan-2024.
+C
+C TERMS AND CONDITIONS
+C --------------------
+C
+C The user of the OPEN-ADAS system and data (hereinafter "the User")
+C accepts the following terms and conditions:
+C
+C   1. The University of Strathclyde uses all reasonable endeavours to
+C      ensure the accuracy of the data provided and any information
+C      given, but the University makes no warranty, expressed or implied
+C      as to its accuracy, integrity, fitness for purpose and shall not
+C      be responsible for the use to which the data is put by the User
+C      and/or any consequences arising out of any inaccuracies or
+C      omissions.
+C
+C   2. Any downloaded OPEN-ADAS file is made available for the
+C      personal use of the User only.  It must not be used for any
+C      commercial application, incorporated into any web site or in
+C      any form re-distributed without express prior written permission
+C      from the ADAS Project. In particular, but not by way of
+C      limitation, it must not be:
+C        *  inserted into a managed database structure,
+C        *  redistributed along with a modelling or analysis code,
+C        *  made available on a public website.
+C
+C Permission for OPEN-ADAS data incorporation in non-commercial
+C code/system development for scientific advance will not be
+C unreasonably withheld, but will be subject to written agreement
+C on a case by case basis.
+C
+C The User will indemnify the University of Strathclyde and keep it
+C fully and effectively indemnified against each and every claim made
+C against the University as a result of the User's use of the data.
+C
+C-----------------------------------------------------------------------

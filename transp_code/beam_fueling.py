@@ -8,7 +8,8 @@ The 70-75% of the beam that creates a population of thermal neutrals still has a
 tertiary...) ionization processes and could contribute to beam fueling beyond the 25-30% of the initial ionization processes.
 """
 
-shot = 1074580301
+# shot = 1074580301
+shot = 1088900311  # 0302, 0310, 0311
 pvol = SimpleSignal(shot, '\\pvol')
 pvolf = SimpleSignal(shot, '\\pvolf')
 einj = SimpleSignal(shot, '\\einj')  # beam injection energy (eV)
@@ -41,6 +42,7 @@ p4, = ax.plot(np.nan, np.nan, label=f'1st pass fueling est: {fuel_frac_est * 100
 leg1 = ax.legend(handles=[p1, p2], loc='upper left', title='#/sec')
 ax.legend(handles=[p3, p4], loc='center left')
 ax.add_artist(leg1)
+plt.title(f'{shot}')
 
 plt.show()
 
