@@ -6,11 +6,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 import re
-from mpl_toolkits.mplot3d import axes3d
 import io
 import datetime
-from bills_LTX_MDSplus_toolbox import get_tree_conn, get_data
 import os
+
+if os.getcwd().startswith('Z:'):  # working on laptop
+    from bills_LTX_MDSplus_toolbox import get_tree_conn, get_data
 
 matplotlib.use('TkAgg')  # allows plotting in debug mode
 clrs = plt.rcParams['axes.prop_cycle'].by_key()['color']
@@ -108,18 +109,34 @@ def read_nbi_ufile(fn=None, lbls=None):
     plt.show()
 
 
-def write_nbi_ufile(shot=None):
-    if shot is None:  # make up some data to write for testing
-        t = np.linspace(0, 300, num=1000)
-        pb = np.zeros_like(t)
-        eb = np.zeros_like(t)
-        itb = np.where((t >= 200) & (t < 210))
-        pb[itb] = 700.e3  # 700 kW
-        eb[itb] = 20.e3  # 20 keV
-        shot = 123456
-        shotdate = '20July-1969'  # copying ufile form, just using random date of moon landing
-    else:
-        t, pb, eb, shotdate = retrieve_nbi_shot_data(shot, plot=False)
+def get_trdat_timing(trdat=None):
+    if trdat is None:
+        trdat = 'C:/Users/willi/Dropbox/work_stuff/108890V01TR.DAT'
+    tstrt, tend = None, None
+    f = open(trdat, 'r')
+    lines = f.readlines()
+    for l in lines:
+        if 'TINIT' in l:
+            tstrt = float(l.split('=')[-1].split(' ')[0])
+        if 'FTIME' in l and 'FTIME_OK' not in l:
+            tend = float(l.split('=')[-1].split(' ')[0])
+    f.close()
+    if tstrt is None:
+        print(f'no start time found in {trdat}')
+        return None, None
+    if tend is None:
+        print(f'no end time found in {trdat}')
+        return None, None
+    return tstrt, tend
+
+
+def write_nbi_ufile(shot=None, alphanum='A01'):
+    # assume working from work laptop (so we can get beam data)
+    direc = f'Z:/transp/t{shot}/'
+    trdat = f'{direc}{shot}{alphanum}TR.DAT'
+    # tstrt, tend = get_trdat_timing(trdat)
+    tstrt, tend = .449, .485
+    t, pb, eb, shotdate = retrieve_nbi_shot_data(shot, plot=False)
 
     # pb[np.where(pb < 0)] = 0.
     # eb[np.where(eb < 0)] = 0.
@@ -128,7 +145,6 @@ def write_nbi_ufile(shot=None):
     ffull = np.ones_like(pb) * .8
     fhalf = np.ones_like(pb) * .1
 
-    direc = f'{os.getcwd()}/data/'
     tofile = f'{direc}AVN{shot}.NBI'  # "time varying neutral beam"
     nbeams = 1  # FOR NOW!! Will LTX ever see a 2nd beam installed? Stay tuned!!
     nt = len(t)
@@ -172,6 +188,8 @@ if __name__ == '__main__':
     # direc = 'C:/Users/willi/PycharmProjects/LTXb-py/transp_code/data/'
     # tofile = f'{direc}testfile{123456}.NBI'
     # read_nbi_ufile(tofile)
-    write_nbi_ufile(108890)
+
     # shot = 108890
     # read_nbi_ufile(f'{os.getcwd()}/data/TVN{shot}.NBI')
+
+    write_nbi_ufile(108890)
