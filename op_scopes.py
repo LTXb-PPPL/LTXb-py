@@ -146,11 +146,11 @@ def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
 		# iacc = np.interp(tdec, tacc, iacc)
 		perv = np.zeros_like(ibeam)
 		perv[:] = np.nan
-		t_beamon = np.where(vbeam >= v_thresh)  # only look at where beam is above 5kV
-		if len(t_beamon[0]) > 0:
+		t_beamon = tbeam[np.where(vbeam >= v_thresh)]  # only look at where beam is above 5kV
+		if len(t_beamon) > 0:
 			pad = 0.25e-3  # remove this amt from beginning/end of beam
-			t_window = np.where((tbeam >= tbeam[t_beamon[0][0]] + pad) & (tbeam <= tbeam[t_beamon[0][-1]] - pad))
-			perv[t_window] = ibeam[t_window] / vbeam[t_window] ** 1.5 * 1.e6  # uPerv
+			i_window = np.where((tbeam >= t_beamon[0] + pad) & (tbeam <= t_beamon[-1] - pad))
+			perv[i_window] = ibeam[i_window] / vbeam[i_window] ** 1.5 * 1.e6  # uPerv
 		else:
 			t_beamon = [.46, .48]  # set some default for setting nbi_win below
 		
@@ -163,7 +163,8 @@ def nbi_ops(shots, nbi_win=None, nbi_tree=False, arc_iv=False, v_thresh=1000.):
 		dt = tbeam[1:] - tbeam[:-1]  # [s]
 		pcntr = (pbeam[1:] + pbeam[:-1]) / 2. * 1000.  # avg power for each time bin [W]
 		einj = np.sum(dt * pcntr)  # [J] energy injected
-		print(f'shot {sh} Einj = {einj / 1000.:.2f} [kJ], <Pb> = {pbeam} kW, <Ib> = {ibeam} A')
+		print(
+			f'shot {sh} Einj = {einj / 1000.:.2f} [kJ], <Pb> = {np.average(pbeam[i_window])} kW, <Ib> = {np.average(ibeam[i_window])} A')
 		iav = np.where(vbeam > v_thresh)
 		vav = (vav * w + np.mean(vbeam[iav])) / (w + 1)
 		pav = (pav * w + np.mean(pbeam[iav])) / (w + 1)
@@ -417,12 +418,33 @@ if __name__ == '__main__':
 	weak-start = [603]
 	"""
 	
-	check = np.array([506587])#, 108887, 108890, 108880, 108874, 108881, 108895, 108891, 108876, 108875, 108894])
+	check = np.array([506587])  # , 108887, 108890, 108880, 108874, 108881, 108895, 108891, 108876, 108875, 108894])
 	# nbi_ops(check, arc_iv=True, nbi_win=[.44, .5])
-	plot_nbi_rawdata([506648])
-	plt.show()
+	# plot_nbi_rawdata([506648])
+	check = np.array([108887, 108890, 108880, 108874, 108881, 108895, 108891, 108876, 108875, 108894])
 	
+	find_10_5_comparison = True
+	if find_10_5_comparison:
+		shlong = 512574 - 12  # gui shot 26, 10 ms pulse
+		shlong2 = 512574 - 9
+		shshrt = 512574 - 14  # gui shot 24, 5 ms pulse
+		shshrt2 = 512574 - 24  # gui shot 14
+		check = np.array([109276])  # 10 ms beam
+		# nbi_ops([shshrt, shlong2])  # 6/26 comparison
+		# nbi_ops([512528, 512534])  # 6/7 comparison
+		nbi_ops([512528, 512534, 512560, 512565])
+		plt.show()
+
 	# for sh in np.arange(509113,509340):
+	# 	t = get_tree_conn(sh, treename='ltx_nbi')
+	# 	print(f'shot {sh} occurred at {get_data(t, ".metadata:timestamp")}')
+	
+	# sh = 512500  # 6/6/23
+	# sh = 512600  # 7/13/23
+	# sh = 512550  # 6/27/23
+	# sh = 512574  # last NBI only shot on 6/27/23 (#38 in GUI)
+	# 6/7/23 shots: 512508-512535
+	# for sh in np.arange(512530, 512550):
 	# 	t = get_tree_conn(sh, treename='ltx_nbi')
 	# 	print(f'shot {sh} occurred at {get_data(t, ".metadata:timestamp")}')
 	

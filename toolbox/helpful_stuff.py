@@ -846,7 +846,7 @@ def smooth(x, window_len=11, window='hanning', mode='valid'):
 	if mode not in ['valid', 'same']:
 		raise ValueError("Mode is one of 'valid', 'same'")
 	
-	if mode is 'valid':
+	if mode == 'valid':
 		s = np.r_[x[window_len - 1:0:-1], x, x[-2:-window_len - 1:-1]]
 	else:
 		s = x
@@ -856,7 +856,7 @@ def smooth(x, window_len=11, window='hanning', mode='valid'):
 	else:
 		w = eval('np.' + window + '(window_len)')
 	
-	if mode is 'valid':
+	if mode == 'valid':
 		y = np.convolve(w / w.sum(), s, mode='valid')
 		y = y[int(window_len / 2):-int(window_len / 2)]  # undo addition in line 808
 	else:
