@@ -66,7 +66,10 @@ def get_beam_dict(eb, pb, twin, ltx_shots):
 		addline = f'! beam parameters set using LTX shots {ltx_shots}'
 	else:
 		addline = '! beam parameters set manually by human input'
-	bhead = f'!==================================================\n! Neutral Beam\n! http://w3.pppl.gov/~pshare/help/body_transp_hlp.html#outfile196.html\n! Written by ltx_neubeamify.py on {ts.strftime("%m/%d/%Y at %I:%M%p")}\n{addline}\n!==================================================\n'
+	bhead = f'!==================================================\n! Neutral Beam\n'
+	bhead += f'! http://w3.pppl.gov/~pshare/help/body_transp_hlp.html#outfile196.html\n'
+	bhead += f'! Written by ltx_neubeamify.py on {ts.strftime("%m/%d/%Y at %I:%M%p")}\n{addline}\n'
+	bhead += f'!==================================================\n'
 	bdict = {'NLBCCW': '.T       ! .T for CCW BT',
 	         'NLJCCW': '.F       ! .T for CCW Ip',
 	         'SELAVG': "'FBM BDENS2 BDENSS3 BMVOL EBA2PL EBA2PP' !quantities	to average",

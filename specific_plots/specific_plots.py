@@ -1,7 +1,13 @@
+import os
+import pickle
+
 import matplotlib.pyplot as plt
 import numpy as np
-from toolbox.helpful_stuff import get_tree_conn, get_data, make_patch_spines_invisible, SimpleSignal, is_nbi_shot
-from neutral_beam.calorimeter_analysis import cal_temp_sigs, cal_dtemp
+from matplotlib import gridspec
+
+from toolbox.helpful_stuff import get_tree_conn, get_data, make_patch_spines_invisible, SimpleSignal, is_nbi_shot, \
+	avg_perv
+from neutral_beam.calorimeter_analysis import cal_temp_sigs, cal_dtemp, get_thermocouple_numbers, cal_gauss_fit
 
 
 def shot_analysis_01mar22():
@@ -417,12 +423,168 @@ def aps_2022_beam_heating():
 	plt.show()
 
 
+def grant_nbi_improvements(newdata=False):
+	savfn = 'Z:/PycharmProjects/LTXb-py/neutral_beam/data/grant_nbi_improvements.pkl'
+	if os.path.exists(savfn) and not newdata:
+		if not os.path.exists(savfn):
+			print('no file found- aggregating data')
+		savdat = pickle.load(open(f'{savfn}', 'rb'))
+		dt_pred_orig, slope_orig, dt_meas_orig = savdat['dt_pred_orig'], savdat['slope_orig'], savdat['dt_meas_orig']
+		dt_pred_srch, slope_srch, dt_meas_srch = savdat['dt_pred_srch'], savdat['slope_srch'], savdat['dt_meas_srch']
+		a0, a1, a2, a3, a4, adt = savdat['a0'], savdat['a1'], savdat['a2'], savdat['a3'], savdat['a4'], savdat['adt']
+		d0, d1, d2, d3, d4, ddt = savdat['d0'], savdat['d1'], savdat['d2'], savdat['d3'], savdat['d4'], savdat['ddt']
+		tp, lbls = savdat['tp'], savdat['lbls']
+	else:
+		original = 104000 + np.array([55, 56, 58, 60, 67, 68, 69, 71, 74, 75, 76, 77, 78, 79])
+		original = np.append(original, np.array(
+			[506587, 506589, 506590, 506591, 506592, 506593, 506594, 506596, 506598, 506600, 506601, 506603, 506609]))
+		
+		searching = np.append(np.append(506600 + np.array(
+			[10, 12, 13, 14, 16, 17, 19, 20, 21, 22, 26, 27, 28, 30, 32, 33, 34, 36, 37, 38, 39, 42, 43, 44, 46, 47,
+			 48]),
+		                                104600 + np.array([43, 42, 41, 40, 38, 37, 36])),
+		                      104900 + np.array([26, 27, 28, 29, 30, 32, 33, 34, 35, 36, 37, 43, 44, 45, 46]))
+		bestcase = 104643
+		dt_pred_orig, dt_meas_orig = np.array([]), np.array([])  # shot arrays for joules
+		for shot in original:
+			dtm, dtp = cal_dtemp(shot, dbug=False)
+			dt_meas_orig = np.append(dt_meas_orig, dtm)
+			dt_pred_orig = np.append(dt_pred_orig, dtp)
+		
+		dt_pred_srch, dt_meas_srch = np.array([]), np.array([])  # shot arrays for joules
+		for shot in searching:
+			dtm, dtp = cal_dtemp(shot, dbug=False)
+			dt_meas_srch = np.append(dt_meas_srch, dtm)
+			dt_pred_srch = np.append(dt_pred_srch, dtp)
+		
+		slope_orig = np.nanmean(dt_meas_orig / dt_pred_orig)
+		slope_srch = np.nanmax(dt_meas_srch / dt_pred_srch)
+		
+		# new orifice, original alignment
+		shots21jan22 = 104800 + np.array([66, 68, 69, 70, 71, 72, 74, 75, 76, 77, 78, 80, 85, 86, 87, 89, 92, 93])
+		# new orifice, realignment 1, shift to right (aim left)
+		shots25jan22 = 104900 + np.array([26, 27, 28, 29, 30, 32, 33, 34, 35, 36, 37, 43, 44, 45, 46])
+		# new orifice, realignment 2, shift part way back left (aim right)
+		shots1feb22 = 105000 + np.array([9, 11, 12, 13, 14, 15])
+		# realignment 3: centered calorimeter based on measurements made on spare
+		shots3feb22 = 105000 + np.array([22, 23, 24, 25, 27])
+		tp = np.linspace(-50, 100, endpoint=True)
+		
+		a0, a1, a2, a3, a4, adt = get_thermocouple_numbers(shots21jan22, tp)
+		d0, d1, d2, d3, d4, ddt = get_thermocouple_numbers(shots3feb22, tp)
+		
+		lbls = ['center', 'down', 'right', 'up', 'left']  # correct labeling
+		
+		savdat = {'dt_pred_orig': dt_pred_orig, 'slope_orig': slope_orig, 'dt_meas_orig': dt_meas_orig,
+		          'dt_pred_srch': dt_pred_srch, 'slope_srch': slope_srch, 'dt_meas_srch': dt_meas_srch,
+		          'a0': a0, 'a1': a1, 'a2': a2, 'a3': a3, 'a4': a4, 'adt': adt, 'd0': d0, 'd1': d1, 'd2': d2, 'd3': d3,
+		          'd4': d4, 'ddt': ddt, 'tp': tp, 'lbls': lbls}
+		
+		pickle.dump(savdat, open(f'{savfn}', 'wb'))
+		print(f'saved set data to pkl file {savfn}')
+	
+	fs, fs2 = 12, 10
+	fig = plt.figure(figsize=(6, 5))
+	gs = gridspec.GridSpec(2, 2)
+	axb = fig.add_subplot(gs[1, :])
+	axb.axis('off')
+	ax1 = fig.add_subplot(gs[1, 0])
+	ax4 = fig.add_subplot(gs[1, 1])
+	axt = fig.add_subplot(gs[0, :])
+	clrs = plt.rcParams['axes.prop_cycle'].by_key()['color']
+	axt.plot([0, 6], [0, 6 * slope_orig], '--', c=clrs[0])
+	axt.plot(dt_pred_orig, dt_meas_orig, 'o', c=clrs[0], label='baseline data')
+	axt.annotate(f'{slope_orig * 100.:.2f}%', (5.5, 1), c=clrs[0], fontsize=fs - 2)
+	
+	axt.plot([0, 4], [0, 4 * slope_srch], '--', c=clrs[3])
+	axt.plot(dt_pred_srch, dt_meas_srch, 'o', c=clrs[3], label='optimized')
+	axt.annotate(f'{slope_srch * 100.:.2f}%', (4, 2), c=clrs[3], fontsize=fs - 2)
+	
+	# ax1.plot(np.linspace(0, max(dt_pred)), np.linspace(0, max(dt_pred)), 'k--', alpha=.5)
+	axt.set_xlabel('predicted $\Delta T$ ($\degree$C)', fontsize=fs)
+	axt.set_ylabel('measured $\Delta T$ ($\degree$C)', fontsize=fs)
+	axt.tick_params(labelsize=fs)
+	axt.set_xlim(xmax=6.25)
+	# ax1.set_title('Calorimeter')
+	axt.legend(fontsize=fs)
+	
+	for i, a in enumerate([a0, a1, a2, a3, a4]):
+		ax1.plot(tp, a, clrs[i])
+	for i, d in enumerate([d0, d1, d2, d3, d4]):
+		ax4.plot(tp, d, clrs[i], label=lbls[i])
+	
+	ax1.set_ylabel('thermocouple\ntemp (deg C)', fontsize=fs)
+	fig.supxlabel('time rel to beam', fontsize=fs)
+	ax4.set_ylim(ax1.get_ylim())
+	for ax in [ax1, ax4, axt]:
+		ax.tick_params(labelsize=fs)
+	
+	for ax in [ax1, ax4]:
+		ax.set_xlim(left=-25)
+	ax1.set_title('Original', fontsize=fs)
+	ax4.set_title('Centered', fontsize=fs)
+	ax4.legend(title='thermocouple', loc='upper right', fontsize=fs2, frameon=True, ncol=1, framealpha=.5)
+	
+	plt.tight_layout()
+	plt.show()
+
+
+def grant_perveance_scan(newdata=False):
+	"""
+	beam aligned on calorimeter, plot fwhm vs perveance
+	plot_vs: fwhm, power_frac_to_cal, or efold
+	"""
+	units = ' (mm)'
+	savfn = 'Z:/PycharmProjects/LTXb-py/neutral_beam/data/grant_perveance_scan.pkl'
+	if os.path.exists(savfn) and not newdata:
+		if not os.path.exists(savfn):
+			print('no file found- aggregating data')
+		savdat = pickle.load(open(f'{savfn}', 'rb'))
+		perv_arr, fwhm_arr = savdat['perv_arr'], savdat['fwhm_arr']
+	else:
+		sh1 = 105100 + np.array(
+			[24, 27, 31, 32, 35, 45, 47, 48, 49, 50, 51, 52, 53, 54, 55, 57, 58, 59, 61, 62, 63, 64, 65, 67, 68, 69, 71,
+			 73,
+			 74, 75, 76])
+		
+		fwhm_arr, perv_arr = np.array([]), np.array([])
+		insuff = []
+		for ish, shot in enumerate(sh1):
+			perv_arr = np.append(perv_arr, avg_perv(shot))
+			fwhm, suff_neut = cal_gauss_fit(shot, ret='fwhm')
+			if not suff_neut:
+				insuff.append(ish)
+			fwhm_arr = np.append(fwhm_arr, fwhm)
+		savdat = {'perv_arr': perv_arr, 'fwhm_arr': fwhm_arr}
+		pickle.dump(savdat, open(f'{savfn}', 'wb'))
+		print(f'saved set data to pkl file {savfn}')
+
+	fs = 12
+	clrs = plt.rcParams['axes.prop_cycle'].by_key()['color']
+	fig, (ax) = plt.subplots(ncols=1)  # 2, figsize=(10, 5))
+	ax1 = ax.twinx()
+	ax1.plot(perv_arr * 1.e6, fwhm_arr, 'o')
+	# ax1.plot(perv_arr[insuff] * 1.e6, fwhm_arr[insuff], 'kx')
+	ax1.set_xlabel('perveance ($\\times 10^{-6}$)', fontsize=fs)
+	ax1.set_ylabel(f'FWHM {units}', fontsize=fs, color=clrs[0])
+	ax1.tick_params(labelsize=fs)
+	ax1.set_xlim((0, 30))
+	ax1.set_ylim((0,130))
+	plt.tight_layout()
+	plt.show()
+
+
 if __name__ == '__main__':
 	# aps_2022_beam_heating()
-	tangency_scan_105952_105795()
-# santanu_sigs()
-# beam_nobeam_103446_465()
-# shot_analysis_01mar22()
-# compare_thermocouple_sigs_to_russian_trace()
-# proposal_nfi()
-# neutralization_improvements()
+	# tangency_scan_105952_105795()
+	# santanu_sigs()
+	# beam_nobeam_103446_465()
+	# shot_analysis_01mar22()
+	# compare_thermocouple_sigs_to_russian_trace()
+	# proposal_nfi()
+	# neutralization_improvements()
+	dick_notable()
+
+	# grant_nbi_improvements(newdata=False)
+	# grant_perveance_scan()
+	
