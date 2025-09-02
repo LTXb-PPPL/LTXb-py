@@ -196,7 +196,7 @@ def build_power_table(df):
         # ΔR and ΔT
         delta_R = R_2 - R_1
         delta_T = delta_R / (R_1 * TCR) if R_1 != 0 else np.nan
-        
+        delta_V = y[plateau_idx] - y[pulse_idx]
         
         #FLIPPING SIGNS UCOMMENT BELOW
         # if delta_R < 0:
@@ -208,8 +208,9 @@ def build_power_table(df):
 
         rows.append({
             "Channel": col,
-            "Pulse_idx": pulse_idx,
-            "Plateau_idx": plateau_idx,
+            "V1 (PULSE IDX)": pulse_idx,
+            "V2 (PLATEAU_IDX)": plateau_idx,
+            "Delta_V (V)": delta_V, 
             "R_1 (Ω)": R_1,
             "R_2 (Ω)": R_2,
             "ΔR (Ω)": delta_R,
