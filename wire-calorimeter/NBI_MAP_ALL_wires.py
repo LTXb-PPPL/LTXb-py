@@ -13,7 +13,7 @@ import plotly.io as pio
 
 
 #FILE SELECTION
-file_list = [Path("/Users/husky/Desktop/wcal/111525.txt")]
+file_list = [Path("wcal/111525.txt")]
 
 #FINDING WHERE TO START DATA
 def find_data_start(path: Path) -> int:
@@ -174,7 +174,7 @@ fig.update_yaxes(range=[-1.75, 1.75])
 fig.show()
 
 # tungsten wire properties
-WIRE_CURRENT = 0.6
+WIRE_CURRENT = 0.8
 TCR = 0.0045
 
 #building a table to manually confirm data
@@ -245,10 +245,6 @@ plt.grid(True)
 
 plt.tight_layout()
 
-
-
-
-
 #GASSIAN FITTING
 def gaussian(x, A, mu, sigma, offset):
     return A * np.exp(-(x - mu)**2 / (2*sigma**2)) + offset
@@ -269,32 +265,17 @@ def fit_and_plot(ax, x, y, label, color, marker):
         print(f"Fit failed for {label}")
     ax.legend()
 
+# --- ΔT overlay with Gaussian fits ---
+fig, ax = plt.subplots(figsize=(12, 6))
 
-fig = plt.plot(figsize=(12, 6))
+# Overlay horizontal + vertical ΔT
+fit_and_plot(ax, horiz.index, horiz["ΔT (°C)"], "Horizontal ΔT", "blue", "s")
+fit_and_plot(ax, vert.index,  vert["ΔT (°C)"],  "Vertical ΔT",   "red",  "s")
 
-
-# ΔT profile
-plt.plot(horiz.index, horiz["ΔT (°C)"], "s-b", label="Horizontal ΔT")
-plt.plot(vert.index,  vert["ΔT (°C)"], "s-r", label="Vertical ΔT")
-plt.title("ΔT profile")
-plt.xlabel("Wire index")
-plt.ylabel("ΔT (°C)")
-plt.legend()
-plt.grid(True)
-
-plt.tight_layout()
-
-# Plotting ΔR and ΔT profiles with Gaussian fits 
-fig = plt.plot(figsize=(12, 6))
-
-# ΔT overlay
-fit_and_plot(horiz.index, horiz["ΔT (°C)"], "Horizontal ΔT", "blue", "s")
-fit_and_plot(vert.index,  vert["ΔT (°C)"],  "Vertical ΔT",   "red",  "s")
-plt.set_title("ΔT profile")
-plt.set_xlabel("Wire index")
-plt.set_ylabel("ΔT (°C)")
-plt.grid(True)
+ax.set_title("ΔT profile with Gaussian fits")
+ax.set_xlabel("Wire index")
+ax.set_ylabel("ΔT (°C)")
+ax.grid(True)
 
 plt.tight_layout()
 plt.show()
-
