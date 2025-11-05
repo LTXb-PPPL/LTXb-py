@@ -1,189 +1,282 @@
-"""This code processes data from a tungsten wire calorimeter experiment to see a map of where the beam hits.
-we are looking at the heat distribution across the wires.
-It calculates the temperature rise in each wire based on resistance changes, and computes the power per cross sectional unit area.
-It also detects pulses in the data and averages the resistance before and after the pulse to determine the temperature change.
-The results are stored in a structured table format, and Gaussian fits are applied to the data for visualization.
-The script assumes a specific tungsten wire setup and uses constants for density and specific heat.
-It also plots the temperature profiles and beam intensity profiles for both horizontal and vertical wires.
-The Gaussian fitting is used to model the data and provide a better understanding of the distribution of heat
-across the wires."""
+#nbi map
+#hussain gajani
 
-#import necessary libraries
+#imports
 from pathlib import Path
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from scipy.optimize import curve_fit
-
-file_path = Path("/Users/husky/Desktop/wcal/111215 0.6A.txt")  
-
-#Settings
-WIRE_CURRENT = 0.6     # Current
-WIN_R1 = 200           # samples before pulse for baseline
-WIN_R2 = 200           # samples for plateau averaging
-
-#TUNGSTEN WIRE PROPERTIES & FORMULAS
-TCR = 0.0045           # tungsten temperature coefficient of resistance
-TUNGSTEN_DENSITY = 19300       # kg/m³
-SPECIFIC_HEAT    = 134         # J/(kg·K)
-WIRE_LENGTH      = 0.2286
-WIRE_DIAMETER    = 0.000254
-WIRE_RADIUS      = WIRE_DIAMETER / 2.0
-WIRE_AREA        = np.pi * WIRE_RADIUS**2 
-WIRE_VOLUME      = WIRE_AREA * WIRE_LENGTH
-WIRE_MASS       = TUNGSTEN_DENSITY * WIRE_VOLUME    # kg
+import matplotlib.pyplot as plt
+import plotly.io as pio
 
 
-#Interpreting The Files 
+#FILE SELECTION
+file_list = [Path("wcal/111525.txt")]
+
+#FINDING WHERE TO START DATA
 def find_data_start(path: Path) -> int:
-    #finding where data starts in the text file
     with open(path, "r", errors="ignore") as f:
         end = -1
         for i, line in enumerate(f):
             if line.strip() == "***End_of_Header***":
                 end = i
-    if end < 0:
-        raise RuntimeError(f"No ***End_of_Header*** found in {path}")
     return end + 1
 
-def load_lvm(path: Path) -> pd.DataFrame:
+#LOADING LVM TO TEXT FILE IN A DATA FRAME
+def load_lvm(path: Path):
     start_row = find_data_start(path)
-    data= pd.read_csv(path, sep="\t", skiprows=start_row, engine="python")
-    data= data.dropna(axis=1, how='all')
-    data["Time (s)"] = data.index * 2e-1  # assume 0.2s per sample
-    return data
+    df = pd.read_csv(path, sep="\t", skiprows=start_row, engine="python")
+    df = df.dropna(axis=1, how="all").reset_index(drop=True)
+    df["Time (s)"] = df.index * 1e-3  # adjust Δt if needed OR 0.002
+    for c in df.columns:
+        if c not in ["Time (s)", "Comment"]:
+            df[c] = pd.to_numeric(df[c]) # CONVERT data to numeric
+    return df
 
-#Pulse Detection and Plateau Detection
-def find_pulse_and_plateau(signal, win=10): #win 10 is how many data points to take
-   
-   #Detect pulse (max slope) and steady plateau after it
-    dV = np.diff(signal) #slope at each point
-    pulse_idx = np.argmax(np.abs(dV)) #finds where largest change occurs
-    search = dV[pulse_idx+win:]
-    plateau_rel = np.argmin(np.abs(search))
-    plateau_idx = pulse_idx + win + plateau_rel
-    return pulse_idx, plateau_idx
+#PULSE AND PLATEAU DETECTION PARAMTERS
+TIME_WINDOW = (1.25, 1.35)  # seconds
+EPS_DERIV = 0.01            # how flat slope must be to call plateau
+MIN_DUR = 0.015             # plateau duration
+DERIV_FLOOR = 0.05          # minimum negative slope to count as pulse
 
-#Table building
-def build_power_table(data: pd.DataFrame) -> pd.DataFrame:
+#slope helper calcualting slope using moving window size (5), giving rate of change at each point in time series
+def rolling_slope(t, y, win=5):
+    t = np.asarray(t, float); y = np.asarray(y, float)
+    if len(t) <= win:
+        return np.full_like(t, np.nan)
+    dt = t[win:] - t[:-win]
+    m = (y[win:] - y[:-win]) / np.where(dt == 0, np.nan, dt)
+    return np.r_[m, np.full(win, np.nan)]
 
-    channel_cols = [c for c in data.columns if c not in ["Time (s)", "Comment"]]
+# FINDING PULSE AND PLTEAU
+def pick_pulse_plateau_gate(t_ser, y_ser, win=5):
+# Pulse = last near-zero slope before strong negative drop inside TIME_WINDOW.
+# Plateau = after dip, first place slope>0 then flattens APPROX close to 0 for MIN_DUR.
+# Plateau marker = 5th sample after that flattening.
+    t = np.asarray(t_ser, float)
+    y = np.asarray(y_ser, float)
+
+    # restrict to time window
+    mask = (t >= TIME_WINDOW[0]) & (t <= TIME_WINDOW[1])
+    if not np.any(mask):
+        return 0, 0
+    idx0, idx1 = np.where(mask)[0][[0, -1]]
+
+    m = rolling_slope(t, y, win=win)
+
+    #finding pulse_idx (intital pulse point)
+    #pick the first strong negative slope as the pulse and then search 
+    #for a positive slope and flattening for the plateau regardless of the order of slopes in the raw data
+    pulse_idx = None
+    for i in range(idx0, idx1):
+        if m[i] < -DERIV_FLOOR:
+            # look backwards to last near-zero slope
+            back = np.where(np.abs(m[idx0:i]) < EPS_DERIV)[0]
+            if len(back):
+                pulse_idx = back[-1]
+            else:
+                pulse_idx = i
+            break
+
+    if pulse_idx is None:
+        # fallback = strongest negative slope inside the window
+        rel_idx = np.nanargmin(m[idx0:idx1+1])
+        pulse_idx = idx0 + int(rel_idx)
+
+    #making sure pulse idx is in the window we want
+    pulse_idx = max(idx0, min(pulse_idx, idx1))
+
+    #finding plateau_idx (point where slope flattens after pulse)
+    plateau_idx = idx1
+    found = False
+    for i in range(pulse_idx+1, idx1-win):
+        # slope > 0 and flattens for MIN_DUR
+        if m[i] > 0:
+            dur = int(MIN_DUR / (t[1]-t[0]))
+            if i+dur < len(m) and np.all(np.abs(m[i:i+dur]) < EPS_DERIV):
+                plateau_idx = min(i+5, len(t)-1)
+                found = True
+                break
+    if not found:
+        plateau_idx = idx1
+
+    return int(pulse_idx), int(plateau_idx)
+
+
+
+#load data set
+datasets = {f.name: load_lvm(f) for f in file_list}
+
+#plot points from first file for a pulse idx and plateau idx plot to visualize the points
+first_file = list(datasets.keys())[0]
+df = datasets[first_file]
+time_col = "Time (s)"
+channel_cols = [c for c in df.columns if c not in [time_col, "Comment"]]
+
+fig = go.Figure()
+
+for col in channel_cols:
+    y = df[col]
+    pulse_idx, plateau_idx = pick_pulse_plateau_gate(df[time_col], y)
+    fig.add_trace(go.Scatter(x=df[time_col], y=y, mode="lines", name=col))
+    fig.add_trace(go.Scatter(x=[df[time_col].iloc[pulse_idx]], y=[y.iloc[pulse_idx]],
+                             mode="markers", marker=dict(color="green", size=9, symbol="circle"),
+                             name=f"{col} pulse"))
+    fig.add_trace(go.Scatter(x=[df[time_col].iloc[plateau_idx]], y=[y.iloc[plateau_idx]],
+                             mode="markers", marker=dict(color="red", size=9, symbol="diamond"),
+                             name=f"{col} plateau"))
+
+#drop down gui menu to pick different files (have to reopen the code and assign the file to see the map)
+buttons = []
+for fname, df in datasets.items():
+    traces_x, traces_y, traces_names = [], [], []
+    for col in channel_cols:
+        y = df[col]
+        pulse_idx, plateau_idx = pick_pulse_plateau_gate(df[time_col], y)
+
+        traces_x.extend([
+            df[time_col],
+            [df[time_col].iloc[pulse_idx]],
+            [df[time_col].iloc[plateau_idx]]
+        ])
+        traces_y.extend([
+            y,
+            [y.iloc[pulse_idx]],
+            [y.iloc[plateau_idx]]
+        ])
+        traces_names.extend([
+            f"{col} trace",
+            f"{col} pulse",
+            f"{col} plateau"
+        ])
+    buttons.append(dict(
+        label=fname,
+        method="update",
+        args=[{"x": traces_x, "y": traces_y, "name": traces_names},
+              {"title": f"Wire Calorimeter – {fname}"}]
+    ))
+
+fig.update_layout(
+    title=f"Wire Calorimeter – {first_file}",
+    xaxis_title="Time (s)",
+    yaxis_title="Voltage (V)",
+    updatemenus=[dict(
+        buttons=buttons,
+        direction="down",
+        x=1.05,
+        y=1.15
+    )]
+)
+
+fig.update_yaxes(range=[-1.75, 1.75])
+fig.show()
+
+# tungsten wire properties
+WIRE_CURRENT = 0.8
+TCR = 0.0045
+
+#building a table to manually confirm data
+def build_power_table(df):
+    channel_cols = [c for c in df.columns if c not in ["Time (s)", "Comment"]]
     rows = []
 
-    pulse_idx, plateau_idx = find_pulse_and_plateau(data[channel_cols[0]].values)
-    dt_sample = data["Time (s)"].iloc[1] - data["Time (s)"].iloc[0]
-    delta_t = 0.005
-    print(f"Pulse at ~{data['Time (s)'].iloc[pulse_idx]:.4f}s, Δt={delta_t:.4f}s")
-
     for col in channel_cols:
-        voltage = data[col].values
-        resistance = voltage / WIRE_CURRENT  # Ohm's law
+        y = df[col].values
+        pulse_idx, plateau_idx = pick_pulse_plateau_gate(df[time_col], y)
+
+        resistance = y / WIRE_CURRENT  # Ohm’s law
 
         # baseline before pulse
-        R_1 = np.mean(resistance[max(0, pulse_idx - WIN_R1):pulse_idx])
+        R_1 = np.mean(resistance[max(0, pulse_idx-5):pulse_idx])
         # plateau after pulse
-        R_2 = np.mean(resistance[plateau_idx:plateau_idx + WIN_R2])
+        R_2 = np.mean(resistance[plateau_idx:plateau_idx+5])
 
-        # change in resistance → temperature rise
+        # ΔR and ΔT
         delta_R = R_2 - R_1
-        delta_T = delta_R / (R_1 * TCR) if R_1 != 0 else float("something wrong in line 87")
+        delta_T = delta_R / (R_1 * TCR) if R_1 != 0 else np.nan
+        delta_V = y[plateau_idx] - y[pulse_idx]
+        
+        #FLIPPING SIGNS UCOMMENT BELOW
+        # if delta_R < 0:
+        #     delta_R = abs(delta_R)
+        #     delta_T = abs(delta_T)
+        #     note = "Sign flipped"
+        # else:
+        #     note = "OK"
 
-        # beam power per unit cross-sectional area
-        P_per_area = TUNGSTEN_DENSITY * WIRE_LENGTH * SPECIFIC_HEAT * (delta_T / delta_t) if delta_t > 0 else float("line 90 issue")
-
-#adding rows to the table
         rows.append({
             "Channel": col,
+            "V1 (PULSE IDX)": pulse_idx,
+            "V2 (PLATEAU_IDX)": plateau_idx,
+            "Delta_V (V)": delta_V, 
             "R_1 (Ω)": R_1,
             "R_2 (Ω)": R_2,
             "ΔR (Ω)": delta_R,
-            "ΔT (°C)": delta_T,
-            "P_per_area (W/m²)": P_per_area
+            "ΔT (°C)": delta_T
         })
 
     return pd.DataFrame(rows)
 
-#GAUSSIAN MODEL FOR FITTING
-def gaussian(x, A, mu, sigma, offset):
-    return A * np.exp(-(x - mu)**2 / (2*sigma**2)) + offset
-
-#creating plot of data and overlaying the gaussian fit
-def fit_and_plot(ax, x, y, label, color="blue"):
-    ax.plot(x, y, "o", label=f"{label} data", color=color)
-    p0 = [max(y)-min(y), np.mean(x), len(x)/4, min(y)]
-    popt, _ = curve_fit(gaussian, x, y, p0=p0)
-    xfit = np.linspace(min(x), max(x), 200)
-    ax.plot(xfit, gaussian(xfit, *popt), "-", color=color, alpha=0.7,
-            label=f"{label} fit (μ={popt[1]:.2f}, σ={popt[2]:.2f})")
-    ax.legend()
-
-# data processing
-data= load_lvm(file_path)
-table = build_power_table(data)
-shot_name = file_path.stem
-print(f"\n===== SHOT NAME: {shot_name} =====\n")
-# remove channel 16 (if present)
-table = table[~table["Channel"].str.contains("16", case=False, na=False)].reset_index(drop=True)
-
+#print table
+table = build_power_table(df)
+print("\n=== Power Table ===")
 print(table.to_string(index=False))
 
-# rows 0–7 = vertical, rows 8–15 = horizontal
+# split vertical (0–7) vs horizontal (8–15)
 vert  = table.iloc[0:8].reset_index(drop=True)
 horiz = table.iloc[8:16].reset_index(drop=True)
 
-def plot_channel_with_pulse(data: pd.DataFrame, channel: str, table: pd.DataFrame):
-    """Plot one channel's time series with markers at pulse and plateau indices."""
 
-    time = data["Time (s)"].values
-    voltage = data[channel].values / WIRE_CURRENT  # resistance (Ω)
 
-    # grab row for this channel from the table
-    row = table[table["Channel"] == channel].iloc[0]
-    pulse_idx = int(row["Pulse index"])
-    plateau_idx = int(row["Plateau index"])
+#plotting the ΔR and ΔT profiles NO GAUSSIAN FIT
 
-    plt.figure(figsize=(10, 5))
-    plt.plot(time, voltage, label=f"{channel} resistance", color="blue")
+fig = plt.plot(figsize=(12, 6))
 
-    # mark pulse and plateau points
-    plt.axvline(time[pulse_idx], color="red", linestyle="--", label=f"Pulse @ {time[pulse_idx]:.4f}s")
-    plt.axvline(time[plateau_idx], color="green", linestyle="--", label=f"Plateau @ {time[plateau_idx]:.4f}s")
 
-    plt.xlabel("Time (s)")
-    plt.ylabel("Resistance (Ω)")
-    plt.title(f"Channel {channel}: pulse/plateau detection")
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-#PLOTTING
-fig, axes = plt.subplots(2, 2, figsize=(12,8))
+# ΔT profile
+plt.plot(horiz.index, horiz["ΔT (°C)"], "s-b", label="Horizontal ΔT")
+plt.plot(vert.index,  vert["ΔT (°C)"], "s-r", label="Vertical ΔT")
+plt.title("ΔT profile")
+plt.xlabel("Wire index")
+plt.ylabel("ΔT (°C)")
+plt.legend()
+plt.grid(True)
 
-# Horizontal ΔT
-axes[0,0].set_title(f"{shot_name} - Horizontal Wires ΔT Profile")
-fit_and_plot(axes[0,0], horiz.index, horiz["ΔT (°C)"], "Horizontal Wires ΔT", "blue")
-axes[0,0].set_xlabel("Wire index (0–7)")
-axes[0,0].set_ylabel("ΔT (°C)")
-axes[0,0].grid(True)
+plt.tight_layout()
 
-# Vertical ΔT
-fit_and_plot(axes[0,1], vert.index, vert["ΔT (°C)"], "Vertical Wires ΔT", "red")
-axes[0,1].set_title("Vertical ΔT Wires Profile")
-axes[0,1].set_xlabel("Wire index (8–15)")
-axes[0,1].grid(True)
+#GASSIAN FITTING
+def gaussian(x, A, mu, sigma, offset):
+    return A * np.exp(-(x - mu)**2 / (2*sigma**2)) + offset
 
-# Horizontal beam intensity (P_per_area)
-fit_and_plot(axes[1,0], horiz.index, horiz["P_per_area (W/m²)"], "Horizontal Wires Beam Intensity", "blue")
-axes[1,0].set_title("Horizontal Wires Beam Intensity Profile")
-axes[1,0].set_xlabel("Wire index (0–7)")
-axes[1,0].set_ylabel("Power per unit area (W/m²)")
-axes[1,0].grid(True)
+# Fit and plot helper
+def fit_and_plot(ax, x, y, label, color, marker):
+    # Scatter the data
+    ax.plot(x, y, marker, label=f"{label} data", color=color)
 
-# Vertical beam intensity (P_per_area)
-fit_and_plot(axes[1,1], vert.index, vert["P_per_area (W/m²)"], "Vertical Wires Beam Intensity", "red")
-axes[1,1].set_title("Vertical Wires Beam Intensity Profile")
-axes[1,1].set_xlabel("Wire index (8–15)")
-axes[1,1].set_ylabel("Power per unit area (W/m²)")
-axes[1,1].grid(True)
+    # Initial guess: amplitude, mean, sigma, offset
+    p0 = [max(y) - min(y), np.mean(x), len(x)/4, np.min(y)]
+    try:
+        popt, _ = curve_fit(gaussian, x, y, p0=p0)
+        xfit = np.linspace(min(x), max(x), 200)
+        ax.plot(xfit, gaussian(xfit, *popt), "-", color=color,
+                label=f"{label} fit (μ={popt[1]:.2f}, σ={popt[2]:.2f})")
+    except RuntimeError:
+        print(f"Fit failed for {label}")
+    ax.legend()
+
+# --- ΔT overlay with Gaussian fits ---
+fig, ax = plt.subplots(figsize=(12, 6))
+
+# Overlay horizontal + vertical ΔT
+fit_and_plot(ax, horiz.index, horiz["ΔT (°C)"], "Horizontal ΔT", "blue", "s")
+fit_and_plot(ax, vert.index,  vert["ΔT (°C)"],  "Vertical ΔT",   "red",  "s")
+
+ax.set_title("ΔT profile with Gaussian fits")
+ax.set_xlabel("Wire index")
+ax.set_ylabel("ΔT (°C)")
+ax.grid(True)
 
 plt.tight_layout()
 plt.show()
